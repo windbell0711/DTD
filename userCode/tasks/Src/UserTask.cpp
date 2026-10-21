@@ -3,6 +3,8 @@
 //
 #include "UserTask.h"
 
+#include "RemoteControl.h"
+
 PID_Regulator_t userPidRegulator = {
         .kp = 60,
         .ki = 0,
@@ -29,13 +31,14 @@ Motor UserMotor(MOTOR_ID_5,&userMotorInit);
  */
 void UserStop(){
     UserMotor.Stop();
+    TurnLServo.stop();
 }
 
 /***
  * 在这里写入初始化内容
  */
 void UserInit(){
-
+    TurnLServo.SetTargetSpeed(0.0f);
 }
 
 /***
@@ -43,4 +46,16 @@ void UserInit(){
  */
 void UserHandle(){
     UserMotor.Handle();
+    TurnLServo.Handle();
+    switch (RemoteControl::rcInfo.sLeft) {
+    case UP_POS:
+        TurnLServo.SetTargetSpeed(50.0f);
+        break;
+    case MID_POS:
+        TurnLServo.SetTargetSpeed(25.0f);
+        break;
+    case DOWN_POS:
+        TurnLServo.SetTargetSpeed(0.0f);
+        break;
+    }
 }
