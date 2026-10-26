@@ -2,6 +2,7 @@
 // Created by LEGION on 2021/10/4.
 //
 #include "ChassisTask.h"
+#include "ChassisKinematics.hpp"
 
 PID_Regulator_t pidRegulator = {//此为储存pid参数的结构体，四个底盘电机共用
         .kp = 60,
@@ -67,30 +68,55 @@ void ChassisStop(){
     CMBR.Stop();
 }
 
-void WheelsSpeedCalc(float fbVelocity, float lrVelocity, float rtVelocity) {
-    float CMFLSpeed, CMFRSpeed, CMBLSpeed, CMBRSpeed;
-
-    rtVelocity = RPM2RADpS(rtVelocity);
-
-    //计算四个轮子线速度，单位：m/s
-    /**
-     * @brief 此处四句代码需要结合底盘的三个速度，计算处四个轮子的位置对应的线速度。
-     * @param fbVelocity,lrVelocity,rtVelocity
-     * @return CMFLSpeed CMFRSpeed CMBLSpeed CMBRSpeed
-     */
-    CMFLSpeed = 0;
-    CMFRSpeed = 0;
-    CMBLSpeed = 0;
-    CMBRSpeed = 0;
-
-    //计算四个轮子角速度，单位：rad/s
-    CMFLSpeed = CMFLSpeed /(WHEEL_DIAMETER/2.0f);
-    CMFRSpeed = CMFRSpeed /(WHEEL_DIAMETER/2.0f);
-    CMBLSpeed = CMBLSpeed /(WHEEL_DIAMETER/2.0f);
-    CMBRSpeed = CMBRSpeed /(WHEEL_DIAMETER/2.0f);
-    //控制底盘电机转速
-    CMFL.SetTargetSpeed(RADpS2RPM(CMFLSpeed));
-    CMFR.SetTargetSpeed(RADpS2RPM(CMFRSpeed));
-    CMBL.SetTargetSpeed(RADpS2RPM(CMBLSpeed));
-    CMBR.SetTargetSpeed(RADpS2RPM(CMBRSpeed));
+/**
+ * @brief 把教学骨架里的宏接到解算类上，保证参数只有一处来源
+ */
+static ChassisKinematics::Config MakeKinematicsConfig() {
+    ChassisKinematics::Config cfg;
+    cfg.wheelDiameter = WHEEL_DIAMETER;
+    cfg.trackWidth    = TRACK_WIDTH;
+    cfg.wheelBase     = WHEEL_BASE;
+    cfg.dirFl         = WHEEL_DIR_FL;
+    cfg.dirFr         = WHEEL_DIR_FR;
+    cfg.dirBl         = WHEEL_DIR_BL;
+    cfg.dirBr         = WHEEL_DIR_BR;
+    cfg.maxLinear     = CHASSIS_MAX_LINEAR;
+    cfg.maxRotRpm     = CHASSIS_MAX_ROT_RPM;
+    return cfg;
 }
+
+static const ChassisKinematics kKinematics{MakeKinematicsConfig()};
+
+/**
+ * @brief 底盘速度 -> 四个轮子目标转速（实现见 ChassisKinematics.cpp）
+ * @param fbVelocity 前后速度，向前为正，m/s
+ * @param lrVelocity 左右速度，向右为正，m/s
+ * @param rtVelocity 旋转速度，顺时针（车头向右转）为正，rpm
+ */
+void WheelsSpeedCalc(float fbVelocity, float lrVelocity, float rtVelocity) {
+    const WheelTargetRpm wheel = kKinematics.solve(fbVelocity, lrVelocity, rtVelocity);
+
+    CMFL.SetTargetSpeed(wheel.fl);
+    CMFR.SetTargetSpeed(wheel.fr);
+    CMBL.SetTargetSpeed(wheel.bl);
+    CMBR.SetTargetSpeed(wheel.br);
+}
+
+#ifdef WHEEL_SELFTEST
+/**
+ * @brief 单轮点动自检：只驱动 SELFTEST_WHEEL 号轮子，其余三轮断电
+ * @note  直接调用 Handle() 刷新电流，不经过遥控器，也不经过逆运动学
+ */
+void ChassisSelfTest() {
+    Motor *wheels[4] = {&CMFL, &CMFR, &CMBL, &CMBR};
+
+    for (uint8_t i = 0; i < 4; ++i) {
+        if (i == (SELFTEST_WHEEL - 1)) {
+            wheels[i]->SetTargetSpeed(SELFTEST_RPM);
+        } else {
+            wheels[i]->Stop();
+        }
+        wheels[i]->Handle();
+    }
+}
+#endif

@@ -39,3 +39,6 @@ MDK-ARM/JLinkLog.txt
 *.out
 *.app
 
+
+# Keil assembler listing
+MDK-ARM/*.lst

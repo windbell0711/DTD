@@ -19,8 +19,14 @@ float PID::PIDCalc(float target,float feedback) {
     PIDInfo.ref = target;
     PIDInfo.err[3] = PIDInfo.ref - PIDInfo.fdb;
     PIDInfo.componentKp = PIDInfo.err[3] * PIDInfo.kp;
-    PIDInfo.errSum += PIDInfo.err[3];
-    INRANGE(PIDInfo.errSum, -1 * PIDInfo.componentKiMax / PIDInfo.ki, PIDInfo.componentKiMax / PIDInfo.ki);
+    if (PIDInfo.ki != 0.0f) {
+        PIDInfo.errSum += PIDInfo.err[3];
+        //积分限幅：componentKiMax 必须设成非 0，否则积分会被钳成 0
+        INRANGE(PIDInfo.errSum, -1 * PIDInfo.componentKiMax / PIDInfo.ki, PIDInfo.componentKiMax / PIDInfo.ki);
+    } else {
+        //ki=0 时不做积分，并清掉累加器，避免以后改 ki 时把历史误差一次性放出来
+        PIDInfo.errSum = 0;
+    }
     PIDInfo.componentKi = PIDInfo.errSum * PIDInfo.ki;
     PIDInfo.componentKd = (PIDInfo.err[3] - PIDInfo.err[2]) * PIDInfo.kd;
     INRANGE(PIDInfo.componentKp, -1 * PIDInfo.componentKpMax, PIDInfo.componentKpMax);
@@ -186,19 +192,29 @@ void Motor::Handle(){
 void Motor::IT_Handle(CAN_HandleTypeDef *hcan) {
     uint8_t canBuf[8];
     CAN_RxHeaderTypeDef rx_header;
-    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_header, canBuf);
-    uint8_t canPos,motorPos;
-    if(hcan == &hcan1){
-        canPos = 0;
-    }else {
-        canPos = 1;
-    }
-    motorPos = rx_header.StdId - 0x201;
-    motorPtrs[canPos][motorPos]->feedback.angle = (canBuf[0]<<8u)|canBuf[1];
-    motorPtrs[canPos][motorPos]->feedback.speed = (canBuf[2]<<8u)|canBuf[3];
-    motorPtrs[canPos][motorPos]->feedback.moment = (canBuf[4]<<8u)|canBuf[5];
-    motorPtrs[canPos][motorPos]->feedback.temp = canBuf[6];
 
+    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rx_header, canBuf) != HAL_OK) {
+        return;
+    }
+    //只处理 C6x0 电调的标准数据帧(0x201~0x208)，其它帧一律丢弃
+    if ((rx_header.IDE != CAN_ID_STD) || (rx_header.RTR != CAN_RTR_DATA) ||
+        (rx_header.StdId < 0x201U) || (rx_header.StdId > 0x208U)) {
+        return;
+    }
+
+    uint8_t canPos = (hcan == &hcan1) ? 0 : 1;
+    uint8_t motorPos = (uint8_t)(rx_header.StdId - 0x201U);
+
+    Motor *motor = motorPtrs[canPos][motorPos];
+    if (motor == nullptr) {
+        //这个ID上没有定义Motor对象，丢帧即可，不能解引用空指针
+        return;
+    }
+
+    motor->feedback.angle  = (int16_t)((canBuf[0] << 8u) | canBuf[1]);
+    motor->feedback.speed  = (int16_t)((canBuf[2] << 8u) | canBuf[3]);
+    motor->feedback.moment = (int16_t)((canBuf[4] << 8u) | canBuf[5]);
+    motor->feedback.temp   = (int16_t)canBuf[6];
 }
 /**
  * @brief 用于设置电机速度，只用当电机控制类型对应时才有效

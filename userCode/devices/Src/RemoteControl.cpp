@@ -6,6 +6,7 @@
 
 RC_Info_t RemoteControl::rcInfo;
 RC_ctrl_t RemoteControl::rc_ctrl;
+uint32_t RemoteControl::lastFrameTick = 0;
 
 uint8_t RemoteControl::sbus_rx_buf[2][SBUS_RX_BUF_NUM];
 
@@ -43,6 +44,26 @@ void RemoteControl::init() {
 }
 
 
+static int32_t rawDistance(int32_t raw, int32_t center)
+{
+    return (raw > center) ? (raw - center) : (center - raw);
+}
+
+/**
+ * @brief 把开关通道的原始值归类到三个档位，取距离最近的一个
+ * @note  用最近距离而不是精确相等：实测值有抖动的遥控器也能稳定判档
+ */
+static SWITCH_STATE_E classifySwitch(int32_t raw)
+{
+    int32_t dUp = rawDistance(raw, RC_SW_UP_RAW);
+    int32_t dMid = rawDistance(raw, RC_SW_MID_RAW);
+    int32_t dDown = rawDistance(raw, RC_SW_DOWN_RAW);
+
+    if ((dUp <= dMid) && (dUp <= dDown)) return UP_POS;
+    if (dDown <= dMid) return DOWN_POS;
+    return MID_POS;
+}
+
 void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rc_ctrl.rc.ch[0] = (sbus_buf[1] | sbus_buf[2] << 8) & 0x07ff;       // Channel 1
     rc_ctrl.rc.ch[1] = (sbus_buf[2] >> 3 | sbus_buf[3] << 5) & 0x07ff;  // Channel 2
@@ -58,15 +79,30 @@ void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rc_ctrl.rc.ch[1] -= RC_CH_VALUE_OFFSET;
     rc_ctrl.rc.ch[2] -= RC_CH_VALUE_OFFSET;
     rc_ctrl.rc.ch[3] -= RC_CH_VALUE_OFFSET;
+    //中位校准：减去松杆时实测的残留偏移，避免松手后车自己漂
+    rc_ctrl.rc.ch[0] -= RC_TRIM_CH0;
+    rc_ctrl.rc.ch[1] -= RC_TRIM_CH1;
+    rc_ctrl.rc.ch[2] -= RC_TRIM_CH2;
+    rc_ctrl.rc.ch[3] -= RC_TRIM_CH3;
+
     rcInfo.right_rol = rc_ctrl.rc.ch[0]/671.0f;
     rcInfo.left_col = rc_ctrl.rc.ch[1]/671.0f;
     rcInfo.right_col = rc_ctrl.rc.ch[2]/671.0f;
     rcInfo.left_rol = rc_ctrl.rc.ch[3]/671.0f;
-    rcInfo.sLeft = (SWITCH_STATE_E)rc_ctrl.rc.s[0];
-    rcInfo.sRight = (SWITCH_STATE_E)rc_ctrl.rc.s[1];
+    rcInfo.sLeft = classifySwitch((int32_t)rc_ctrl.rc.s[0]);
+    rcInfo.sRight = classifySwitch((int32_t)rc_ctrl.rc.s[1]);
     rcInfo.optional[0] = rc_ctrl.rc.optional[0];
     rcInfo.optional[1] = rc_ctrl.rc.optional[1];
 
+    lastFrameTick = HAL_GetTick();
+}
+
+/**
+ * @brief 判断遥控器是否在线
+ * @note  遥控帧约 7~14 ms 一帧，100 ms 收不到就认为掉线
+ */
+bool RemoteControl::isOnline() {
+    return (HAL_GetTick() - lastFrameTick) < 100u;
 }
 void RemoteControl::ITHandle() {
     if (huart3.Instance->SR & UART_FLAG_RXNE)//接收到数据
