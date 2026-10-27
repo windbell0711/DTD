@@ -21,12 +21,13 @@ MOTOR_INIT_t chassisMotorInit = {//四个底盘电机共用的初始化结构体
         .reductionRatio = 19.0f,
         .ctrlType = SPEED_Single,
 };
-Motor CMFL(MOTOR_ID_1,&chassisMotorInit);//定义左前轮电机
-Motor CMFR(MOTOR_ID_2,&chassisMotorInit);//定义右前轮电机
-Motor CMBL(MOTOR_ID_3,&chassisMotorInit);//定义左后轮电机
-Motor CMBR(MOTOR_ID_4,&chassisMotorInit);//定义右后轮电机
 
-uint8_t ChassisStopFlag = 1;
+Motor CMFL(MOTOR_ID_1,&chassisMotorInit);//定义左前轮电机
+Motor CMFR(MOTOR_ID_4,&chassisMotorInit);//定义右前轮电机
+Motor CMBL(MOTOR_ID_2,&chassisMotorInit);//定义左后轮电机
+Motor CMBR(MOTOR_ID_3,&chassisMotorInit);//定义右后轮电机
+
+uint8_t ChassisStopFlag = 0;
 float FBVelocity,LRVelocity,RTVelocity;
 
 void ChassisStart(){
@@ -94,12 +95,12 @@ static const ChassisKinematics kKinematics{MakeKinematicsConfig()};
  * @param rtVelocity 旋转速度，顺时针（车头向右转）为正，rpm
  */
 void WheelsSpeedCalc(float fbVelocity, float lrVelocity, float rtVelocity) {
-    const WheelTargetRpm wheel = kKinematics.solve(fbVelocity, lrVelocity, rtVelocity);
+    const WheelTargetRpm wheel = kKinematics.solve(fbVelocity, -lrVelocity, rtVelocity);
 
     CMFL.SetTargetSpeed(wheel.fl);
-    CMFR.SetTargetSpeed(wheel.fr);
+    CMFR.SetTargetSpeed(-wheel.fr);
     CMBL.SetTargetSpeed(wheel.bl);
-    CMBR.SetTargetSpeed(wheel.br);
+    CMBR.SetTargetSpeed(-wheel.br);
 }
 
 #ifdef WHEEL_SELFTEST
