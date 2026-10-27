@@ -10,6 +10,7 @@
 #define SBUS_RX_BUF_NUM 36u
 #define RC_FRAME_LENGTH 25u
 #define RC_CH_VALUE_OFFSET 1024
+#define RC_LINK_TIMEOUT_MS 100u
 /*枚举类型定义------------------------------------------------------------*/
 typedef enum{
     UP_POS = 97u,MID_POS = 0u,DOWN_POS = 158u
@@ -52,6 +53,11 @@ public:
     static void ITHandle();
     static uint8_t sbus_rx_buf[2][SBUS_RX_BUF_NUM];
     static void sbus_to_rc(volatile const uint8_t *sbus_buf);
+    static bool isOnline();
+
+private:
+    static volatile uint32_t lastUpdateTick;
+    static volatile bool online;
 };
 
 /*结构体成员取值定义组------------------------------------------------------*/

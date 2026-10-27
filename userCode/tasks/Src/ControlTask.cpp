@@ -3,8 +3,8 @@
 //
 #include "ControlTask.h"
 void CtrlHandle(){
-    if (RemoteControl::rcInfo.sRight == DOWN_POS){
-        //右侧下三档，急停模式，请勿更改！！！
+    if (!RemoteControl::isOnline() || RemoteControl::rcInfo.sRight == DOWN_POS){
+        //失联或右侧下三档，急停模式，请勿更改！
         ChassisStop();
         UserStop();
     } else {

@@ -3,17 +3,12 @@
 //
 
 #include "Servo.h"
-
-
-SERVO_INIT_T aServoInit = {
-    .servoType = SPEED_360,
-    .servoID = SERVO_ID_1,
-    .firstAngle = 0,
-    .angleLimit_Min = 0,
-    .angleLimit_Max = 180
-};
-Servo TurnLServo = Servo(&aServoInit);
-
+namespace {
+constexpr float kServoSpeedLimit = 100.0f;
+constexpr float kServoPulseNeutralMs = 1.5f;
+constexpr float kServoPulsePerSpeedMs = 0.005f;
+constexpr float kServoPeriodMs = 20.0f;
+}
 
 const SERVO_HANDLE_T servoInfo[7]={
         {&htim1, TIM_CHANNEL_1},
@@ -46,17 +41,13 @@ Servo::Servo(SERVO_INIT_T *servoInit) {
 
     servo_IDs |= deviceID;
     servoType = servoInit->servoType;
-    float duty;
+    duty = 0.0f;
     if(servoType == POSITION_180) {
         duty = AFFINE(0,180,0.025,0.125,servoInit->firstAngle);
     }else if(servoType == SPEED_360){
-        duty = 0.075;
+        duty = kServoPulseNeutralMs / kServoPeriodMs;
     }
-    auto pos = GET_SERVO_POS(deviceID);
-
-    __HAL_TIM_SET_COMPARE(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel,
-            htim1.Instance->ARR*duty);
-
+    ApplyDuty(duty);
 }
 
 void Servo::stop() {
@@ -66,24 +57,28 @@ void Servo::stop() {
         HAL_TIM_PWM_Stop(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel);
     }
 }
+
+void Servo::ApplyDuty(float _duty) {
+    auto pos = GET_SERVO_POS(deviceID);
+    const auto &cfg = servoInfo[pos];
+    const uint32_t periodTicks = cfg.handleTypeDef->Instance->ARR + 1u;
+    __HAL_TIM_SET_COMPARE(cfg.handleTypeDef, cfg.timChannel,
+                          static_cast<uint32_t>(periodTicks * _duty));
+}
 /**
  * @brief 设置舵机角度
  * @param _targetAngle
  */
 void Servo::SetTargetAngle(float _targetAngle) {
-    //TODO 检查舵机类型,检查角度限位
     if (servoType != POSITION_180) {
         return;
     }
-    if (targetAngle < angleLimit_Min || targetAngle > angleLimit_Max) {
-        return;
-    }
+    INRANGE(_targetAngle,angleLimit_Min,angleLimit_Max);
     if(stopFlag == 1){
         stopFlag = 0;
         auto pos = GET_SERVO_POS(deviceID);
         HAL_TIM_PWM_Start(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel);
     }
-    INRANGE(_targetAngle,angleLimit_Min,angleLimit_Max);
     targetAngle = _targetAngle;
 }
 /**
@@ -91,10 +86,10 @@ void Servo::SetTargetAngle(float _targetAngle) {
  * @param _targetSpeed 舵机速度
  */
 void Servo::SetTargetSpeed(float _targetSpeed) {
-    //TODO 检查舵机类型
     if (servoType != SPEED_360) {
         return;
     }
+    INRANGE(_targetSpeed,-kServoSpeedLimit,kServoSpeedLimit);
     if(stopFlag == 1){
         stopFlag = 0;
         auto pos = GET_SERVO_POS(deviceID);
@@ -108,37 +103,15 @@ void Servo::SetTargetSpeed(float _targetSpeed) {
 void Servo::Handle() {
     if (servoType == POSITION_180){
         duty = AFFINE(0,180,0.025,0.125,targetAngle);
-        auto pos = GET_SERVO_POS(deviceID);
-
-        __HAL_TIM_SET_COMPARE(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel,
-                              htim1.Instance->ARR*duty);
-
     }else if(servoType == SPEED_360){
-        float s = targetSpeed;              // -100..100
-        float pulse_ms;
-
-        if (s <= -100.0f) {
-            pulse_ms = 0.5f;                // 饱和：最快顺时针
-        } else if (s < 0.0f) {
-            // 顺时针线性区：s=-100→1.0ms, s=0→1.5ms
-            // 注意：表格说 ≤1.0ms 都已饱和，这里用 1.0ms 作线性区上界
-            pulse_ms = 1.5f + s * 0.005f;   // -100→1.0, 0→1.5
-        } else if (s == 0.0f) {
-            pulse_ms = 1.5f;                // 停止
-        } else if (s < 100.0f) {
-            // 逆时针线性区（若舵机不支持逆时针，这一支删掉/钳到1.5ms）
-            pulse_ms = 1.5f + s * 0.005f;   // 0→1.5, 100→2.0
-        } else {
-            pulse_ms = 2.5f;                // 饱和：最快逆时针
-        }
-
-        duty = pulse_ms / 20.0f;            // 周期 20ms
-
-        auto pos = GET_SERVO_POS(deviceID);
-
-        __HAL_TIM_SET_COMPARE(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel,
-                      htim1.Instance->ARR*duty);
+        // 1.0 ms ~ 2.0 ms 对应 -100 ~ +100；若舵机手册允许 0.5 ~ 2.5 ms，
+        // 将 kServoPulsePerSpeedMs 改为 0.01f 即可。
+        const float pulse_ms = kServoPulseNeutralMs + kServoPulsePerSpeedMs * targetSpeed;
+        duty = pulse_ms / kServoPeriodMs;
+    }else{
+        return;
     }
+    ApplyDuty(duty);
 }
 
 void Servo::ErrorHandle() {

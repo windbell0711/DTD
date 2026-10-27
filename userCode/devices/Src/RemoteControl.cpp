@@ -6,10 +6,16 @@
 
 RC_Info_t RemoteControl::rcInfo;
 RC_ctrl_t RemoteControl::rc_ctrl;
+volatile uint32_t RemoteControl::lastUpdateTick = 0;
+volatile bool RemoteControl::online = false;
 
 uint8_t RemoteControl::sbus_rx_buf[2][SBUS_RX_BUF_NUM];
 
 void RemoteControl::init() {
+    rcInfo.sLeft = DOWN_POS;
+    rcInfo.sRight = DOWN_POS;
+    online = false;
+
     //enable the DMA transfer for the receiver request
     //使能 DMA 串口接收
     SET_BIT(huart3.Instance->CR3, USART_CR3_DMAR);
@@ -42,6 +48,9 @@ void RemoteControl::init() {
     __HAL_DMA_ENABLE(&hdma_usart3_rx);
 }
 
+bool RemoteControl::isOnline() {
+    return online && (HAL_GetTick() - lastUpdateTick <= RC_LINK_TIMEOUT_MS);
+}
 
 void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rc_ctrl.rc.ch[0] = (sbus_buf[1] | sbus_buf[2] << 8) & 0x07ff;       // Channel 1
@@ -67,6 +76,8 @@ void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rcInfo.optional[0] = rc_ctrl.rc.optional[0];
     rcInfo.optional[1] = rc_ctrl.rc.optional[1];
 
+    lastUpdateTick = HAL_GetTick();
+    online = true;
 }
 void RemoteControl::ITHandle() {
     if (huart3.Instance->SR & UART_FLAG_RXNE)//接收到数据
