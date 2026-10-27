@@ -4,8 +4,10 @@
 #include "ChassisTask.h"
 #include "ChassisKinematics.hpp"
 
+#define SPEED_SCALE_ARG (0.5f)
+
 PID_Regulator_t pidRegulator = {//此为储存pid参数的结构体，四个底盘电机共用
-        .kp = 60,
+        .kp = 120,
         .ki = 0,
         .kd = 0,
         .componentKpMax = 16384,
@@ -54,9 +56,9 @@ void ChassisHandle() {
  */
 void ChassisSetVelocity(float _fbV,float _lrV,float _rtV){
     ChassisStopFlag = 0;
-    FBVelocity = _fbV;
-    LRVelocity = _lrV;
-    RTVelocity = _rtV;
+    FBVelocity = SPEED_SCALE_ARG * _fbV;
+    LRVelocity = SPEED_SCALE_ARG * _lrV;
+    RTVelocity = SPEED_SCALE_ARG * _rtV;
 }
 /**
  * @brief 执行急停模式的底盘任务处理
