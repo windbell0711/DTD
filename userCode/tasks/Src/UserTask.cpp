@@ -35,12 +35,22 @@ SERVO_INIT_T TurnL_Servo_Init = {
 };
 Servo TurnLServo(&TurnL_Servo_Init);
 
+SERVO_INIT_T TurnR_Servo_Init = {
+        .servoType = SPEED_360,
+        .servoID = SERVO_ID_2,
+        .firstAngle = 0,
+        .angleLimit_Min = 0,
+        .angleLimit_Max = 180
+};
+Servo TurnRServo(&TurnR_Servo_Init);
+
 /***
  * 在这里放入xxx.stop()即可使舵机,电机在遥控器急停挡位断电
  */
 void UserStop(){
     UserMotor.Stop();
     TurnLServo.stop();
+    TurnRServo.stop();
 }
 
 /***
@@ -48,7 +58,9 @@ void UserStop(){
  */
 void UserInit(){
     TurnLServo.SetTargetSpeed(0.0f);
+    TurnRServo.SetTargetSpeed(0.0f);
     TurnLServo.Handle();
+    TurnRServo.Handle();
 }
 
 /***
@@ -60,20 +72,25 @@ void UserHandle(){
     } else {
         switch (RemoteControl::rcInfo.sLeft) {
         case UP_POS:
-            TurnLServo.SetTargetSpeed(50.0f);
+            TurnLServo.SetTargetSpeed(90.0f);
+            TurnRServo.SetTargetSpeed(-90.0f);
             break;
         case MID_POS:
-            TurnLServo.SetTargetSpeed(25.0f);
+            TurnLServo.SetTargetSpeed(85.0f);
+            TurnRServo.SetTargetSpeed(-85.0f);
             break;
         case DOWN_POS:
             TurnLServo.SetTargetSpeed(0.0f);
+            TurnRServo.SetTargetSpeed(0.0f);
             break;
         default:
             TurnLServo.SetTargetSpeed(0.0f);
+            TurnRServo.SetTargetSpeed(0.0f);
             break;
         }
     }
 
     UserMotor.Handle();
     TurnLServo.Handle();
+    TurnRServo.Handle();
 }

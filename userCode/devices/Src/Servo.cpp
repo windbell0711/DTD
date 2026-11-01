@@ -83,14 +83,14 @@ void Servo::SetTargetAngle(float _targetAngle) {
 }
 /**
  * @设置舵机速度
- * @param _targetSpeed 舵机速度
+ * @param _targetSpeed 舵机速度 (-100 到 100)
  */
 void Servo::SetTargetSpeed(float _targetSpeed) {
     if (servoType != SPEED_360) {
         return;
     }
-    INRANGE(_targetSpeed,-kServoSpeedLimit,kServoSpeedLimit);
-    if(stopFlag == 1){
+    INRANGE(_targetSpeed,-kServoSpeedLimit,kServoSpeedLimit); // (-100 到 100)
+    if(stopFlag == 1) {
         stopFlag = 0;
         auto pos = GET_SERVO_POS(deviceID);
         HAL_TIM_PWM_Start(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel);
@@ -104,8 +104,9 @@ void Servo::Handle() {
     if (servoType == POSITION_180){
         duty = AFFINE(0,180,0.025,0.125,targetAngle);
     }else if(servoType == SPEED_360){
-        // 1.0 ms ~ 2.0 ms 对应 -100 ~ +100；若舵机手册允许 0.5 ~ 2.5 ms，
-        // 将 kServoPulsePerSpeedMs 改为 0.01f 即可。
+        // 舵机的控制一般需要一个20ms左右的时基脉冲，该脉冲的高电平部分一般为0.5ms-2.5ms范围内的角度控制脉冲部分
+        // 高电平为1毫秒~1.5毫秒时，舵机正转(1毫秒时正转速度最快，越接近1.5毫秒越慢，1.5毫秒时舵机停转)
+        // 高电平为1.5毫秒时舵机停转，越接近2毫秒反转的速度越快，2毫秒时以最
         const float pulse_ms = kServoPulseNeutralMs + kServoPulsePerSpeedMs * targetSpeed;
         duty = pulse_ms / kServoPeriodMs;
     }else{
