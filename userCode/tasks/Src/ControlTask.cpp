@@ -42,10 +42,11 @@ void CtrlHandle(){
                                ApplyDeadzone(RemoteControl::rcInfo.left_rol) * CHASSIS_MAX_ROT_RPM);
             break;
         case MID_POS: //左侧二档
-
+            //离开底盘档必须停车，否则会保持上一次的摇杆速度继续跑
+            ChassisStop();
             break;
         case DOWN_POS: //左侧三档
-
+            ChassisStop();
             break;
         default:
             break;

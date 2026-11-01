@@ -4,6 +4,14 @@
 #include "UserTask.h"
 #include "RemoteControl.h"
 #include "ChassisTask.h"
+#include "BusServo.h"
+
+#if defined(BUS_SERVO_TEST) || defined(BUS_SERVO_SET_ID)
+static BusServo *g_busServo = nullptr;
+#endif
+
+// 总线舵机自检结果：bit0 = ID1 应答, bit1 = ID2 应答（Keil Watch 里直接看）
+volatile uint8_t g_busServoStatus = 0;
 
 PID_Regulator_t userPidRegulator = {
         .kp = 60,
@@ -79,7 +87,27 @@ void UserStop(){
  * 在这里写入初始化内容
  */
 void UserInit(){
-
+#if defined(BUS_SERVO_TEST) || defined(BUS_SERVO_SET_ID)
+    // 放在函数内构造：此时 UART 已经初始化完毕
+    static BusServo servo(BUS_SERVO_UART);
+    g_busServo = &servo;
+#endif
+#ifdef BUS_SERVO_SET_ID
+    // 只接一个舵机时使用：把 ID 1 改成 ID 2
+    if (servo.ping(1)) {
+        servo.setID(1, 2);
+    }
+#endif
+#ifdef BUS_SERVO_TEST
+    uint8_t st = 0;
+    if (servo.ping(1)) {
+        st |= 0x01;
+    }
+    if (servo.ping(2)) {
+        st |= 0x02;
+    }
+    g_busServoStatus = st;
+#endif
 }
 
 /***
@@ -89,5 +117,24 @@ void UserHandle(){
     UserMotor.Handle();
 #ifdef RC_DEBUG
     UserDebugPrint();
+#endif
+#ifdef BUS_SERVO_TEST
+    // 每 20 ms 同步下发两个舵机的目标位置：1 号正向扫，2 号反向扫（镜像）
+    static uint32_t lastTick = 0;
+    static int16_t target = 1000;
+    static int8_t dir = 1;
+
+    uint32_t now = HAL_GetTick();
+    if (g_busServo && ((now - lastTick) >= 20u)) {
+        lastTick = now;
+
+        const uint8_t ids[2] = {1, 2};
+        const int16_t pos[2] = {target, (int16_t)(4095 - target)};
+        g_busServo->syncWritePos(ids, pos, 600, 30, 2);
+
+        target = (int16_t)(target + dir * 40);
+        if (target >= 3000) { target = 3000; dir = -1; }
+        if (target <= 1000) { target = 1000; dir = 1; }
+    }
 #endif
 }
