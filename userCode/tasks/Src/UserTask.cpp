@@ -13,6 +13,10 @@ static BusServo *g_busServo = nullptr;
 // 总线舵机自检结果：bit0 = ID1 应答, bit1 = ID2 应答（Keil Watch 里直接看）
 volatile uint8_t g_busServoStatus = 0;
 
+#ifdef PWM180_TEST
+static Servo *g_liftServo = nullptr;
+#endif
+
 PID_Regulator_t userPidRegulator = {
         .kp = 60,
         .ki = 0,
@@ -81,6 +85,11 @@ static void UserDebugPrint() {
  */
 void UserStop(){
     UserMotor.Stop();
+#ifdef PWM180_TEST
+    if (g_liftServo) {
+        g_liftServo->stop();   // 急停时升降舵机断电，避免较劲
+    }
+#endif
 }
 
 /***
@@ -107,6 +116,12 @@ void UserInit(){
         st |= 0x02;
     }
     g_busServoStatus = st;
+#endif
+#ifdef PWM180_TEST
+    // 180° 位置舵机：SERVO_ID_3 -> TIM1_CH3 -> PE13
+    static SERVO_INIT_T liftInit = {POSITION_180, PWM180_SERVO_ID, 90.0f, 0.0f, 180.0f};
+    static Servo lift(&liftInit);
+    g_liftServo = &lift;
 #endif
 }
 
@@ -135,6 +150,24 @@ void UserHandle(){
         target = (int16_t)(target + dir * 40);
         if (target >= 3000) { target = 3000; dir = -1; }
         if (target <= 1000) { target = 1000; dir = 1; }
+    }
+#endif
+#ifdef PWM180_TEST
+    // 180° 舵机：每 20 ms 走 1°，在 40°~140° 之间来回
+    static uint32_t lastLiftTick = 0;
+    static float liftAngle = 40.0f;
+    static float liftStep = 1.0f;
+
+    uint32_t nowLift = HAL_GetTick();
+    if (g_liftServo && ((nowLift - lastLiftTick) >= 20u)) {
+        lastLiftTick = nowLift;
+
+        g_liftServo->SetTargetAngle(liftAngle);
+        g_liftServo->Handle();
+
+        liftAngle += liftStep;
+        if (liftAngle >= 140.0f) { liftAngle = 140.0f; liftStep = -1.0f; }
+        if (liftAngle <= 40.0f)  { liftAngle = 40.0f;  liftStep = 1.0f; }
     }
 #endif
 }

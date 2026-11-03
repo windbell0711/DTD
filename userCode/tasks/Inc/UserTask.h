@@ -38,6 +38,14 @@
  */
 //#define BUS_SERVO_SET_ID
 
+/*
+ * 180° PWM 舵机自检（升降板）：
+ * 舵机接 SERVO_ID_3 → TIM1_CH3 → PE13；如果接在第四个口就改成 SERVO_ID_4（PE14）。
+ * 打开后舵机在 40°~140° 之间来回摆动。
+ */
+#define PWM180_TEST
+#define PWM180_SERVO_ID     SERVO_ID_3
+
 extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
 
 /*外部函数声明-------------------------------------------------------------*/
