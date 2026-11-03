@@ -11,9 +11,31 @@ constexpr uint8_t kAddrAcc    = 0x29;   // 加速度（后面紧跟目标位置/
 
 // 等待应答的轮询次数，约 0.5 ms（168 MHz 下）
 constexpr uint32_t kRecvSpin = 12000u;
+
+/**
+ * @brief 补上 USART6 的引脚复用配置
+ * @note  CubeMX 生成的 HAL_UART_MspInit 里只有 USART1/USART3 的分支，
+ *        USART6 的 PG9/PG14 从来没有被配成 AF8，串口寄存器在动但引脚不出波形。
+ */
+void ensureUsart6Pins() {
+    __HAL_RCC_GPIOG_CLK_ENABLE();
+
+    GPIO_InitTypeDef gpio = {0};
+    gpio.Pin       = GPIO_PIN_14;          // USART6_TX，半双工下兼作收发
+    gpio.Mode      = GPIO_MODE_AF_PP;
+    gpio.Pull      = GPIO_PULLUP;
+    gpio.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    gpio.Alternate = GPIO_AF8_USART6;
+    HAL_GPIO_Init(GPIOG, &gpio);
+
+    gpio.Pin = GPIO_PIN_9;                 // USART6_RX
+    HAL_GPIO_Init(GPIOG, &gpio);
+}
 }
 
 BusServo::BusServo(UART_HandleTypeDef *huart, uint32_t baud) : uart_(huart) {
+    ensureUsart6Pins();
+
     uart_->Init.BaudRate     = baud;
     uart_->Init.WordLength   = UART_WORDLENGTH_8B;
     uart_->Init.StopBits     = UART_STOPBITS_1;
