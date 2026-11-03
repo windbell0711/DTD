@@ -21,15 +21,16 @@ void ensureUsart6Pins() {
     __HAL_RCC_GPIOG_CLK_ENABLE();
 
     GPIO_InitTypeDef gpio = {0};
-    gpio.Pin       = GPIO_PIN_14;          // USART6_TX，半双工下兼作收发
+    gpio.Pin       = GPIO_PIN_14;          // USART6_TX，半双工下兼作收发（板子 UART2 口）
     gpio.Mode      = GPIO_MODE_AF_PP;
     gpio.Pull      = GPIO_PULLUP;
     gpio.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
     gpio.Alternate = GPIO_AF8_USART6;
     HAL_GPIO_Init(GPIOG, &gpio);
 
-    gpio.Pin = GPIO_PIN_9;                 // USART6_RX
-    HAL_GPIO_Init(GPIOG, &gpio);
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    gpio.Pin = GPIO_PIN_7;                 // USART6_RX（板子 UART2 口）
+    HAL_GPIO_Init(GPIOC, &gpio);
 }
 }
 
