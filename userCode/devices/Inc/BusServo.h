@@ -17,8 +17,8 @@
  *   总线是单线的：板子发的时候舵机听，舵机回的时候板子听。
  *   驱动初始化时会把 UART 设成半双工（HDSEL），TX 引脚兼作收发。
  *
- *   默认用 USART1（PA9 = TX）。如果板子上引出的串口不是 USART1，
- *   改下面的 BUS_SERVO_UART 即可（比如 huart6）。
+ *   这里用 USART6，对应 C 板的 UART2（3-pin：5V / GND / 信号），
+ *   信号脚是芯片的 PG14（USART6_TX）。
  *
  * ============================== 协议 ==============================
  *   帧：0xFF 0xFF ID LEN INSTR PARAM... CHECKSUM
@@ -27,7 +27,7 @@
  */
 #include "Device.h"
 
-#define BUS_SERVO_UART      (&huart1)
+#define BUS_SERVO_UART      (&huart6)
 #define BUS_SERVO_BAUD      1000000u
 
 class BusServo {
