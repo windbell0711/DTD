@@ -11,6 +11,9 @@ uint32_t RemoteControl::lastFrameTick = 0;
 uint8_t RemoteControl::sbus_rx_buf[2][SBUS_RX_BUF_NUM];
 
 void RemoteControl::init() {
+    rcInfo.SB = DOWN_POS;
+    rcInfo.SC = DOWN_POS;
+
     //enable the DMA transfer for the receiver request
     //使能 DMA 串口接收
     SET_BIT(huart3.Instance->CR3, USART_CR3_DMAR);
@@ -111,6 +114,7 @@ void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
 bool RemoteControl::isOnline() {
     return (HAL_GetTick() - lastFrameTick) < 100u;
 }
+
 void RemoteControl::ITHandle() {
     if (huart3.Instance->SR & UART_FLAG_RXNE)//接收到数据
     {

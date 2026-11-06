@@ -5,6 +5,9 @@
 RM_Frame_C.uvguix.*
 MDK-ARM/JLinkLog.txt
 
+# macOS metadata
+.DS_Store
+
 
 # Prerequisites
 *.d

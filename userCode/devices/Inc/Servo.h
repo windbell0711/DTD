@@ -45,8 +45,7 @@ class Servo :public Device
     float targetAngle{0};
     float targetSpeed{0};
 
-    void SetTargetSpeed(float _targetSpeed);
-
+    void ApplyDuty(float _duty);
     void ErrorHandle() override;
 
 
@@ -56,6 +55,7 @@ public:
     void stop();
 
     void SetTargetAngle(float _targetAngle);
+    void SetTargetSpeed(float _targetSpeed);
 
     void Handle() override;
 };

@@ -3,6 +3,12 @@
 //
 
 #include "Servo.h"
+namespace {
+constexpr float kServoSpeedLimit = 100.0f;
+constexpr float kServoPulseNeutralMs = 1.5f;
+constexpr float kServoPulsePerSpeedMs = 0.005f;
+constexpr float kServoPeriodMs = 20.0f;
+}
 
 const SERVO_HANDLE_T servoInfo[5]={
         {&htim1, TIM_CHANNEL_1},
@@ -35,17 +41,13 @@ Servo::Servo(SERVO_INIT_T *servoInit) {
 
     servo_IDs |= deviceID;
     servoType = servoInit->servoType;
-    float duty;
+    duty = 0.0f;
     if(servoType == POSITION_180) {
         duty = AFFINE(0,180,0.025,0.125,servoInit->firstAngle);
     }else if(servoType == SPEED_360){
-        duty = 0.075;
+        duty = kServoPulseNeutralMs / kServoPeriodMs;
     }
-    auto pos = GET_SERVO_POS(deviceID);
-
-    __HAL_TIM_SET_COMPARE(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel,
-            htim1.Instance->ARR*duty);
-
+    ApplyDuty(duty);
 }
 
 void Servo::stop() {
@@ -55,27 +57,40 @@ void Servo::stop() {
         HAL_TIM_PWM_Stop(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel);
     }
 }
+
+void Servo::ApplyDuty(float _duty) {
+    auto pos = GET_SERVO_POS(deviceID);
+    const auto &cfg = servoInfo[pos];
+    const uint32_t periodTicks = cfg.handleTypeDef->Instance->ARR + 1u;
+    __HAL_TIM_SET_COMPARE(cfg.handleTypeDef, cfg.timChannel,
+                          static_cast<uint32_t>(periodTicks * _duty));
+}
 /**
  * @brief 设置舵机角度
  * @param _targetAngle
  */
 void Servo::SetTargetAngle(float _targetAngle) {
-    //TODO 检查舵机类型,检查角度限位
+    if (servoType != POSITION_180) {
+        return;
+    }
+    INRANGE(_targetAngle,angleLimit_Min,angleLimit_Max);
     if(stopFlag == 1){
         stopFlag = 0;
         auto pos = GET_SERVO_POS(deviceID);
         HAL_TIM_PWM_Start(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel);
     }
-    INRANGE(_targetAngle,angleLimit_Min,angleLimit_Max);
     targetAngle = _targetAngle;
 }
 /**
  * @设置舵机速度
- * @param _targetSpeed 舵机速度
+ * @param _targetSpeed 舵机速度 (-100 到 100)
  */
 void Servo::SetTargetSpeed(float _targetSpeed) {
-    //TODO 检查舵机类型
-    if(stopFlag == 1){
+    if (servoType != SPEED_360) {
+        return;
+    }
+    INRANGE(_targetSpeed,-kServoSpeedLimit,kServoSpeedLimit); // (-100 到 100)
+    if(stopFlag == 1) {
         stopFlag = 0;
         auto pos = GET_SERVO_POS(deviceID);
         HAL_TIM_PWM_Start(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel);
@@ -88,14 +103,16 @@ void Servo::SetTargetSpeed(float _targetSpeed) {
 void Servo::Handle() {
     if (servoType == POSITION_180){
         duty = AFFINE(0,180,0.025,0.125,targetAngle);
-        auto pos = GET_SERVO_POS(deviceID);
-
-        __HAL_TIM_SET_COMPARE(servoInfo[pos].handleTypeDef,servoInfo[pos].timChannel,
-                              htim1.Instance->ARR*duty);
-
     }else if(servoType == SPEED_360){
-
+        // 舵机的控制一般需要一个20ms左右的时基脉冲，该脉冲的高电平部分一般为0.5ms-2.5ms范围内的角度控制脉冲部分
+        // 高电平为1毫秒~1.5毫秒时，舵机正转(1毫秒时正转速度最快，越接近1.5毫秒越慢，1.5毫秒时舵机停转)
+        // 高电平为1.5毫秒时舵机停转，越接近2毫秒反转的速度越快，2毫秒时以最
+        const float pulse_ms = kServoPulseNeutralMs + kServoPulsePerSpeedMs * targetSpeed;
+        duty = pulse_ms / kServoPeriodMs;
+    }else{
+        return;
     }
+    ApplyDuty(duty);
 }
 
 void Servo::ErrorHandle() {
