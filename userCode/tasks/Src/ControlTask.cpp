@@ -41,15 +41,33 @@ void CtrlHandle(){
         if (RemoteControl::rcInfo.SA == UP_POS) {
             // 前同步带控制
             switch (RemoteControl::rcInfo.SB) {
-                // case UP_POS:   pushrod_out();  break;
-                // case MID_POS:  pushrod_in();   break;
-                // case DOWN_POS: pushrod_off();  break;
+            case UP_POS:
+                TurnLServo.SetTargetSpeed(90.0f);
+                TurnRServo.SetTargetSpeed(-90.0f);
+                break;
+            case MID_POS:
+                TurnLServo.SetTargetSpeed(-90.0f);
+                TurnRServo.SetTargetSpeed(90.0f);
+                break;
+            case DOWN_POS:
+                TurnLServo.SetTargetSpeed(0.0f);
+                TurnRServo.SetTargetSpeed(0.0f);
+                break;
             }
             // 后同步带控制
             switch (RemoteControl::rcInfo.SC) {
-                // case UP_POS:   pushrod_out();  break;
-                // case MID_POS:  pushrod_in();   break;
-                // case DOWN_POS: pushrod_off();  break;
+                case UP_POS:
+                    ShovelLServo.SetTargetSpeed(90.0f);
+                    ShovelRServo.SetTargetSpeed(-90.0f);
+                    break;
+                case MID_POS:
+                    ShovelLServo.SetTargetSpeed(-90.0f);
+                    ShovelRServo.SetTargetSpeed(90.0f);
+                    break;
+                case DOWN_POS:
+                    ShovelLServo.SetTargetSpeed(0.0f);
+                    ShovelRServo.SetTargetSpeed(0.0f);
+                    break;
             }
         } else if (RemoteControl::rcInfo.SA == DOWN_POS) {
             // 推杆控制

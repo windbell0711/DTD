@@ -82,7 +82,6 @@ public:
     static void ITHandle();
     static uint8_t sbus_rx_buf[2][SBUS_RX_BUF_NUM];
     static void sbus_to_rc(volatile const uint8_t *sbus_buf);
-    static bool isOnline();
 
 private:
     static volatile uint32_t lastUpdateTick;

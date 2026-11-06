@@ -2,8 +2,8 @@
 // Created by LEGION on 2021/10/4.
 //
 #include "UserTask.h"
-#include "RemoteControl.h"
 #include "ChassisTask.h"
+#include "PushRod.h"
 
 PID_Regulator_t userPidRegulator = {
         .kp = 60,
@@ -67,8 +67,12 @@ Servo ShovelRServo(&ShovelR_Servo_Init);
  */
 void UserStop(){
     UserMotor.Stop();
+
+    pushrod_off();
+
     TurnLServo.stop();
     TurnRServo.stop();
+
     ShovelLServo.stop();
     ShovelRServo.stop();
 }
@@ -91,37 +95,6 @@ void UserInit(){
  * 用户自定义任务主循环
  */
 void UserHandle(){
-    if (!RemoteControl::isOnline() || RemoteControl::rcInfo.sRight == DOWN_POS) {
-        UserStop();
-    } else {
-        switch (RemoteControl::rcInfo.sLeft) {
-        case UP_POS:
-            TurnLServo.SetTargetSpeed(90.0f);
-            TurnRServo.SetTargetSpeed(-90.0f);
-            ShovelLServo.SetTargetSpeed(90.0f);
-            ShovelRServo.SetTargetSpeed(-90.0f);
-            break;
-        case MID_POS:
-            TurnLServo.SetTargetSpeed(85.0f);
-            TurnRServo.SetTargetSpeed(-85.0f);
-            ShovelLServo.SetTargetSpeed(85.0f);
-            ShovelRServo.SetTargetSpeed(-85.0f);
-            break;
-        case DOWN_POS:
-            TurnLServo.SetTargetSpeed(0.0f);
-            TurnRServo.SetTargetSpeed(0.0f);
-            ShovelLServo.SetTargetSpeed(0.0f);
-            ShovelRServo.SetTargetSpeed(0.0f);
-            break;
-        default:
-            TurnLServo.SetTargetSpeed(0.0f);
-            TurnRServo.SetTargetSpeed(0.0f);
-            ShovelLServo.SetTargetSpeed(0.0f);
-            ShovelRServo.SetTargetSpeed(0.0f);
-            break;
-        }
-    }
-
     UserMotor.Handle();
     TurnLServo.Handle();
     TurnRServo.Handle();
