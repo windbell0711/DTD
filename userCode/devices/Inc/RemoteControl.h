@@ -20,7 +20,7 @@ typedef enum{
  * 三位开关(SB/SC)的原始通道值（S.BUS 11 位，未减偏移）。
  * 这几个数必须与手头遥控器的实际读数一致，否则档位永远判不对。
  * 当前值：2026-10 实测天地飞 ET08 + W.BUS，SB 三档为 353 / 1024 / 1694。
- * 换遥控器/换接收机后请重新测：打开 RC_DEBUG，拨动 SB/SC，看 s[0]/s[1]。
+ * 换遥控器/换接收机后请重新测：拨动 SB/SC，用调试器看 s[0]/s[1]。
  * 判档逻辑见 RemoteControl.cpp 的 classifySwitch()。
  */
 #define RC_SW_UP_RAW    353

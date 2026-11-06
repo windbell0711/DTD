@@ -50,6 +50,9 @@ public:
     bool syncWritePos(const uint8_t *ids, const int16_t *pos,
                       uint16_t speed = 1500, uint8_t acc = 50, uint8_t n = 2);
 
+    /** 同步写转矩开关（广播帧，无应答） */
+    bool syncWriteTorque(const uint8_t *ids, bool enable, uint8_t n = 2);
+
     /** 读当前位置（0~4095） */
     bool readPos(uint8_t id, int16_t &pos);
 

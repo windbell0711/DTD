@@ -7,27 +7,24 @@
 #include "BusServo.h"
 
 static BusServo *g_busServo = nullptr;
-static bool g_busServoTorqueOn = true;
-static int8_t g_busServoLastPreset = -1;
+static int8_t g_busServoPreset = -1;
+static bool g_busServoTorqueEnabled = false;
+static uint32_t g_busServoLastRefreshTick = 0;
+static uint32_t g_busServoLastTorqueOffTick = 0;
 
 namespace {
 constexpr uint8_t kBusServoCount = 2;
 constexpr uint8_t kBusServoIds[kBusServoCount] = {BUS_SERVO_ID_1, BUS_SERVO_ID_2};
 constexpr uint16_t kBusServoSpeed = 600;
 constexpr uint8_t kBusServoAcceleration = 30;
+constexpr uint32_t kBusServoRefreshMs = 50;
+constexpr uint32_t kBusServoTorqueOffRetryMs = 100;
 
-void BusServoSetTorque(bool enable) {
-    if ((g_busServo == nullptr) || (g_busServoTorqueOn == enable)) {
-        return;
+bool BusServoWriteTorque(bool enable) {
+    if (g_busServo == nullptr) {
+        return false;
     }
-
-    for (uint8_t i = 0; i < kBusServoCount; ++i) {
-        g_busServo->setTorque(kBusServoIds[i], enable);
-    }
-    g_busServoTorqueOn = enable;
-    if (!enable) {
-        g_busServoLastPreset = -1;
-    }
+    return g_busServo->syncWriteTorque(kBusServoIds, enable, kBusServoCount);
 }
 
 bool BusServoWritePreset(int8_t preset) {
@@ -53,9 +50,6 @@ bool BusServoWritePreset(int8_t preset) {
                                     kBusServoAcceleration, kBusServoCount);
 }
 }
-
-// 总线舵机自检结果：bit0 = ID1 应答, bit1 = ID2 应答（Keil Watch 里直接看）
-volatile uint8_t g_busServoStatus = 0;
 
 PID_Regulator_t userPidRegulator = {
         .kp = 60,
@@ -122,7 +116,16 @@ void UserStop(){
 
     pushrod_off();
 
-    BusServoSetTorque(false);
+    if (g_busServo != nullptr) {
+        const uint32_t now = HAL_GetTick();
+        if (g_busServoTorqueEnabled ||
+            ((now - g_busServoLastTorqueOffTick) >= kBusServoTorqueOffRetryMs)) {
+            BusServoWriteTorque(false);
+            g_busServoTorqueEnabled = false;
+            g_busServoLastTorqueOffTick = now;
+        }
+    }
+    g_busServoPreset = -1;
 
     TurnLServo.stop();
     TurnRServo.stop();
@@ -144,37 +147,15 @@ void UserInit(){
     ShovelLServo.Handle();
     ShovelRServo.Handle();
 
-    // 放在函数内构造：此时 UART 已经初始化完毕
+    // UART 已初始化，构造总线舵机对象
     static BusServo servo(BUS_SERVO_UART);
     g_busServo = &servo;
-
-    // 急停可能只断开了舵机转矩；MCU 复位后重新上力，避免恢复控制时舵机不动
-    for (uint8_t i = 0; i < kBusServoCount; ++i) {
-        servo.setTorque(kBusServoIds[i], true);
-    }
-    g_busServoTorqueOn = true;
-
-#ifdef BUS_SERVO_SET_ID
-    // 只接一个舵机时使用：把 ID 1 改成 ID 2
-    if (servo.ping(1)) {
-        servo.setID(1, 2);
-    }
-#endif
-#ifdef BUS_SERVO_TEST
-    uint8_t st = 0;
-    if (servo.ping(1)) {
-        st |= 0x01;
-    }
-    if (servo.ping(2)) {
-        st |= 0x02;
-    }
-    g_busServoStatus = st;
-#endif
+    g_busServoLastTorqueOffTick = HAL_GetTick() - kBusServoTorqueOffRetryMs;
 }
 
 /**
  * @brief 按遥控器 SC 三挡设置总线舵机目标位置
- * @note  只在档位变化时发一帧，避免 1 ms 控制循环持续占用总线
+ * @note  档位变化立即下发，并每 50 ms 重发一次，丢包或舵机重新上电后可恢复
  */
 void BusServoSetPosition(SWITCH_STATE_E sw) {
     int8_t preset;
@@ -185,14 +166,18 @@ void BusServoSetPosition(SWITCH_STATE_E sw) {
         default:       return;
     }
 
-    BusServoSetTorque(true);
-    if (preset == g_busServoLastPreset) {
+    const uint32_t now = HAL_GetTick();
+    if ((preset == g_busServoPreset) &&
+        ((now - g_busServoLastRefreshTick) < kBusServoRefreshMs)) {
         return;
     }
 
-    if (BusServoWritePreset(preset)) {
-        g_busServoLastPreset = preset;
+    if (BusServoWriteTorque(true)) {
+        g_busServoTorqueEnabled = true;
     }
+    BusServoWritePreset(preset);
+    g_busServoPreset = preset;
+    g_busServoLastRefreshTick = now;
 }
 
 /***
@@ -204,24 +189,4 @@ void UserHandle(){
     TurnRServo.Handle();
     ShovelLServo.Handle();
     ShovelRServo.Handle();
-
-#ifdef BUS_SERVO_TEST
-    // 每 20 ms 同步下发两个舵机的目标位置：1 号正向扫，2 号反向扫（镜像）
-    static uint32_t lastTick = 0;
-    static int16_t target = 1000;
-    static int8_t dir = 1;
-
-    uint32_t now = HAL_GetTick();
-    if (g_busServo && ((now - lastTick) >= 20u)) {
-        lastTick = now;
-
-        const uint8_t ids[2] = {1, 2};
-        const int16_t pos[2] = {target, (int16_t)(4095 - target)};
-        g_busServo->syncWritePos(ids, pos, 600, 30, 2);
-
-        target = (int16_t)(target + dir * 40);
-        if (target >= 3000) { target = 3000; dir = -1; }
-        if (target <= 1000) { target = 1000; dir = 1; }
-    }
-#endif
 }

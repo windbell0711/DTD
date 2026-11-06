@@ -261,3 +261,22 @@ bool BusServo::syncWritePos(const uint8_t *ids, const int16_t *pos,
     // 0xFE = 广播 ID，0x83 = SYNC WRITE，舵机不回应答
     return sendFrame(0xFE, 0x83, p, i);
 }
+
+bool BusServo::syncWriteTorque(const uint8_t *ids, bool enable, uint8_t n) {
+    if ((n == 0) || (n > 8) || (ids == nullptr)) {
+        return false;
+    }
+
+    uint8_t p[2 + 8 * 2];
+    uint8_t i = 0;
+
+    p[i++] = kAddrTorque;
+    p[i++] = 1;
+
+    for (uint8_t k = 0; k < n; ++k) {
+        p[i++] = ids[k];
+        p[i++] = enable ? 1 : 0;
+    }
+
+    return sendFrame(0xFE, 0x83, p, i);
+}

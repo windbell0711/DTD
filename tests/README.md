@@ -31,4 +31,4 @@ g++ -std=c++11 -O2 -Wall -IuserCode/tasks/Inc \
 - 遥控器解析、档位原始值
 - PID 参数、机械安装
 
-这些只能上板验证，见工程根目录的调试步骤（`RC_DEBUG` / `WHEEL_SELFTEST`）。
+这些只能上板验证，见工程根目录的调试步骤（`WHEEL_SELFTEST` / Keil Watch）。

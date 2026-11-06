@@ -76,7 +76,7 @@ void CtrlHandle(){
                 case MID_POS:  pushrod_in();   break;
                 case DOWN_POS: pushrod_off();  break;
             }
-            // 总线舵机控制
+            // 总线舵机控制（SC 与后同步带共用，仅 SA 下档生效）
             BusServoSetPosition(RemoteControl::rcInfo.SC);
         } else {
             // 未知危险状态
