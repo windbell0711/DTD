@@ -24,6 +24,28 @@
  */
 #define RC_DEBUG
 
+/*
+ * 总线舵机自检：
+ * 打开后，ID=1 和 ID=2 两个总线舵机会镜像来回扫动（1000~3000）。
+ * 用来验证「USART1 接线 / 波特率 / 半双工 / 舵机 ID」是否正确。
+ */
+#define BUS_SERVO_TEST
+
+/*
+ * 改舵机 ID（默认关闭）：
+ * 总线上只接「一个」舵机时打开，上电会把 ID 1 改成 ID 2。
+ * 注意：这个模式和 BUS_SERVO_TEST 不要同时打开。
+ */
+//#define BUS_SERVO_SET_ID
+
+/*
+ * 180° PWM 舵机自检（升降板）：
+ * 舵机接 SERVO_ID_3 → TIM1_CH3 → PE13；如果接在第四个口就改成 SERVO_ID_4（PE14）。
+ * 打开后舵机在 40°~140° 之间来回摆动。
+ */
+#define PWM180_TEST
+#define PWM180_SERVO_ID     SERVO_ID_3
+
 extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
 
 /*外部函数声明-------------------------------------------------------------*/

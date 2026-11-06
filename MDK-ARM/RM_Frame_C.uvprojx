@@ -675,6 +675,11 @@
           <GroupName>Devices</GroupName>
           <Files>
             <File>
+              <FileName>BusServo.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\userCode\devices\Src\BusServo.cpp</FilePath>
+            </File>
+            <File>
               <FileName>Device.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>..\userCode\devices\Src\Device.cpp</FilePath>
