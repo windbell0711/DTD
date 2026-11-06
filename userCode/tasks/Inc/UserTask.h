@@ -8,6 +8,7 @@
 #include "Device.h"
 #include "Servo.h"
 #include "Motor.h"
+#include "RemoteControl.h"
 /*枚举类型定义------------------------------------------------------------*/
 
 
@@ -27,9 +28,10 @@
 /*
  * 总线舵机自检：
  * 打开后，ID=1 和 ID=2 两个总线舵机会镜像来回扫动（1000~3000）。
- * 用来验证「USART1 接线 / 波特率 / 半双工 / 舵机 ID」是否正确。
+ * 用来验证「USART6 接线 / 波特率 / 半双工 / 舵机 ID」是否正确。
+ * 正常遥控控制时保持关闭。
  */
-#define BUS_SERVO_TEST
+//#define BUS_SERVO_TEST
 
 /*
  * 改舵机 ID（默认关闭）：
@@ -46,6 +48,19 @@
 #define PWM180_TEST
 #define PWM180_SERVO_ID     SERVO_ID_3
 
+/*
+ * 总线舵机遥控映射（SA 下档时由 SC 三挡控制）：
+ *   SC 上 / 中 / 下 -> BUS_SERVO_POS_UP / MID / DOWN
+ * 位置为 ST3215 原始值，0~4095 对应一圈；先按机械行程改这三个值。
+ * ID2 默认与 ID1 镜像安装，目标位置自动取 4095 - ID1 的目标位置。
+ */
+#define BUS_SERVO_ID_1              1
+#define BUS_SERVO_ID_2              2
+#define BUS_SERVO_MIRROR_SECOND     1
+#define BUS_SERVO_POS_UP            1000
+#define BUS_SERVO_POS_MID           2048
+#define BUS_SERVO_POS_DOWN          3000
+
 extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
 
 /*外部函数声明-------------------------------------------------------------*/
@@ -53,4 +68,5 @@ extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
 void UserStop();
 void UserHandle();
 void UserInit();
+void BusServoSetPosition(SWITCH_STATE_E sw);
 #endif //RM_FRAME_C_USERTASK_H

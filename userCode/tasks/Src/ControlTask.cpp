@@ -77,11 +77,7 @@ void CtrlHandle(){
                 case DOWN_POS: pushrod_off();  break;
             }
             // 总线舵机控制
-            switch (RemoteControl::rcInfo.SC) {
-                // case UP_POS:   pushrod_out();  break;
-                // case MID_POS:  pushrod_in();   break;
-                // case DOWN_POS: pushrod_off();  break;
-            }
+            BusServoSetPosition(RemoteControl::rcInfo.SC);
         } else {
             // 未知危险状态
             ChassisStop();

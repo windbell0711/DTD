@@ -6,9 +6,53 @@
 #include "PushRod.h"
 #include "BusServo.h"
 
-#if defined(BUS_SERVO_TEST) || defined(BUS_SERVO_SET_ID)
 static BusServo *g_busServo = nullptr;
+static bool g_busServoTorqueOn = true;
+static int8_t g_busServoLastPreset = -1;
+
+namespace {
+constexpr uint8_t kBusServoCount = 2;
+constexpr uint8_t kBusServoIds[kBusServoCount] = {BUS_SERVO_ID_1, BUS_SERVO_ID_2};
+constexpr uint16_t kBusServoSpeed = 600;
+constexpr uint8_t kBusServoAcceleration = 30;
+
+void BusServoSetTorque(bool enable) {
+    if ((g_busServo == nullptr) || (g_busServoTorqueOn == enable)) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        g_busServo->setTorque(kBusServoIds[i], enable);
+    }
+    g_busServoTorqueOn = enable;
+    if (!enable) {
+        g_busServoLastPreset = -1;
+    }
+}
+
+bool BusServoWritePreset(int8_t preset) {
+    if ((g_busServo == nullptr) || (preset < 0) || (preset > 2)) {
+        return false;
+    }
+
+    const int16_t presetPos[3] = {
+        BUS_SERVO_POS_UP,
+        BUS_SERVO_POS_MID,
+        BUS_SERVO_POS_DOWN
+    };
+
+    int16_t pos[kBusServoCount];
+    pos[0] = presetPos[preset];
+#if BUS_SERVO_MIRROR_SECOND
+    pos[1] = (int16_t)(4095 - pos[0]);
+#else
+    pos[1] = pos[0];
 #endif
+
+    return g_busServo->syncWritePos(kBusServoIds, pos, kBusServoSpeed,
+                                    kBusServoAcceleration, kBusServoCount);
+}
+}
 
 // 总线舵机自检结果：bit0 = ID1 应答, bit1 = ID2 应答（Keil Watch 里直接看）
 volatile uint8_t g_busServoStatus = 0;
@@ -78,6 +122,8 @@ void UserStop(){
 
     pushrod_off();
 
+    BusServoSetTorque(false);
+
     TurnLServo.stop();
     TurnRServo.stop();
 
@@ -97,11 +143,17 @@ void UserInit(){
     TurnRServo.Handle();
     ShovelLServo.Handle();
     ShovelRServo.Handle();
-#if defined(BUS_SERVO_TEST) || defined(BUS_SERVO_SET_ID)
+
     // 放在函数内构造：此时 UART 已经初始化完毕
     static BusServo servo(BUS_SERVO_UART);
     g_busServo = &servo;
-#endif
+
+    // 急停可能只断开了舵机转矩；MCU 复位后重新上力，避免恢复控制时舵机不动
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        servo.setTorque(kBusServoIds[i], true);
+    }
+    g_busServoTorqueOn = true;
+
 #ifdef BUS_SERVO_SET_ID
     // 只接一个舵机时使用：把 ID 1 改成 ID 2
     if (servo.ping(1)) {
@@ -118,6 +170,29 @@ void UserInit(){
     }
     g_busServoStatus = st;
 #endif
+}
+
+/**
+ * @brief 按遥控器 SC 三挡设置总线舵机目标位置
+ * @note  只在档位变化时发一帧，避免 1 ms 控制循环持续占用总线
+ */
+void BusServoSetPosition(SWITCH_STATE_E sw) {
+    int8_t preset;
+    switch (sw) {
+        case UP_POS:   preset = 0; break;
+        case MID_POS:  preset = 1; break;
+        case DOWN_POS: preset = 2; break;
+        default:       return;
+    }
+
+    BusServoSetTorque(true);
+    if (preset == g_busServoLastPreset) {
+        return;
+    }
+
+    if (BusServoWritePreset(preset)) {
+        g_busServoLastPreset = preset;
+    }
 }
 
 /***
