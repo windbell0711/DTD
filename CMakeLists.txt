@@ -47,7 +47,6 @@ include_directories(Inc Drivers/STM32F4xx_HAL_Driver/Inc Drivers/STM32F4xx_HAL_D
         Drivers/CMSIS/Include
         Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
         Middlewares/ST/STM32_USB_Device_Library/Core/Inc
-        userCode/bsp/Inc
         userCode/devices/Inc
         userCode/tasks/Inc
         )
