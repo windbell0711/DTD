@@ -56,14 +56,18 @@ typedef struct {
     mouse_t mouse;
     keyboard_t key;
 }RC_ctrl_t;
+
 typedef struct {
     float left_col,left_rol;
     float right_col,right_rol;
-    SWITCH_STATE_E sLeft;
+    SWITCH_STATE_E SB;
     uint32_t pat;
-    SWITCH_STATE_E sRight;
+    SWITCH_STATE_E SC;
     int16_t optional[2];
-}RC_Info_t;
+    SWITCH_STATE_E SA;
+    SWITCH_STATE_E SD;
+} RC_Info_t;
+
 /*类型定义----------------------------------------------------------------*/
 class RemoteControl : public Device {
 public:

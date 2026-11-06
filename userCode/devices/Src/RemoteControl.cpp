@@ -87,12 +87,19 @@ void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
 
     rcInfo.right_rol = rc_ctrl.rc.ch[0]/671.0f;
     rcInfo.left_col = rc_ctrl.rc.ch[1]/671.0f;
+
     rcInfo.right_col = rc_ctrl.rc.ch[2]/671.0f;
     rcInfo.left_rol = rc_ctrl.rc.ch[3]/671.0f;
-    rcInfo.sLeft = classifySwitch((int32_t)rc_ctrl.rc.s[0]);
-    rcInfo.sRight = classifySwitch((int32_t)rc_ctrl.rc.s[1]);
+
+    rcInfo.SB = classifySwitch((int32_t)rc_ctrl.rc.s[0]);
+    rcInfo.SC = classifySwitch((int32_t)rc_ctrl.rc.s[1]);
+
     rcInfo.optional[0] = rc_ctrl.rc.optional[0];
     rcInfo.optional[1] = rc_ctrl.rc.optional[1];
+
+    // 增加自定义配置
+    rcInfo.SA = classifySwitch((int32_t)rcInfo.optional[0]);
+    rcInfo.SD = classifySwitch((int32_t)rcInfo.optional[1]);
 
     lastFrameTick = HAL_GetTick();
 }
