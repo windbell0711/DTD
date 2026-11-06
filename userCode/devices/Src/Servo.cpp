@@ -4,14 +4,14 @@
 
 #include "Servo.h"
 
-const SERVO_HANDLE_T servoInfo[7]={
+const SERVO_HANDLE_T servoInfo[5]={
         {&htim1, TIM_CHANNEL_1},
         {&htim1, TIM_CHANNEL_2},
         {&htim1, TIM_CHANNEL_3},
         {&htim1, TIM_CHANNEL_4},
         {&htim8, TIM_CHANNEL_1},
-        {&htim8, TIM_CHANNEL_2},
-        {&htim8, TIM_CHANNEL_3},
+        // {&htim8, TIM_CHANNEL_2},
+        // {&htim8, TIM_CHANNEL_3},
 };
 
 uint32_t Servo::servo_IDs;

@@ -80,6 +80,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define EXTRA_GPIO_PWM7_Pin GPIO_PIN_7
+#define EXTRA_GPIO_PWM7_GPIO_Port GPIOI
+#define EXTRA_GPIO_PWM6_Pin GPIO_PIN_6
+#define EXTRA_GPIO_PWM6_GPIO_Port GPIOI
 #define OLED_BUTTON_Pin GPIO_PIN_1
 #define OLED_BUTTON_GPIO_Port GPIOF
 #define IST8310_RSTN_Pin GPIO_PIN_6
