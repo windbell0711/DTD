@@ -10,15 +10,17 @@
  *   总线舵机  = 串行数据帧，双向，可读位置/速度/负载/温度
  *
  * ============================== 接线 ==============================
- *   C 板 UART 的 TX 引脚 ──── 舵机信号线（一根）
- *   GND ──────────────────── 舵机 GND（必须共地）
- *   舵机电源 6~12.6V ─────── 独立供电（不要从 C 板取）
+ *   连接 C 板 UART 的 TX 引脚 ──── 舵机信号线（一根）
  *
  *   总线是单线的：板子发的时候舵机听，舵机回的时候板子听。
  *   驱动初始化时会把 UART 设成半双工（HDSEL），TX 引脚兼作收发。
  *
- *   这里用 USART6，对应 C 板的 UART2（3-pin：5V / GND / 信号），
- *   信号脚是芯片的 PG14（USART6_TX）。
+ *   这里用 USART1，对应 C 板的 UART2（4P）接口，
+ *   信号脚是芯片的 PA9（USART1_TX）。PB7 是 USART1_RX，
+ *   半双工单线模式下不额外接线。
+ *
+ *   如果板子引出的串口不是 USART1，改下面的 BUS_SERVO_UART
+ *   为实际使用的 huartN 即可。
  *
  * ============================== 协议 ==============================
  *   帧：0xFF 0xFF ID LEN INSTR PARAM... CHECKSUM
@@ -27,7 +29,7 @@
  */
 #include "Device.h"
 
-#define BUS_SERVO_UART      (&huart6)
+#define BUS_SERVO_UART      (&huart1)
 #define BUS_SERVO_BAUD      1000000u
 
 class BusServo {
