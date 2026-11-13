@@ -28,10 +28,9 @@ volatile uint8_t g_dbgCalibResult = 0;   // 0未尝试 1成功 2失败
 volatile uint32_t g_dbgHoldMs = 0;
 
 static BusServo *g_busServo = nullptr;
-static int8_t g_busServoPreset = -1;
 static bool g_busServoTorqueEnabled = false;
-static uint32_t g_busServoLastRefreshTick = 0;
 static uint32_t g_busServoLastTorqueOffTick = 0;
+float g_busServoAngle = BUS_SERVO_ANGLE_INIT;
 
 namespace {
 constexpr uint8_t kBusServoCount = 2;
@@ -40,10 +39,12 @@ constexpr uint8_t kBusServoIds[kBusServoCount] = {
 };
 constexpr uint16_t kBusServoSpeed = 600;
 constexpr uint8_t kBusServoAcceleration = 30;
-constexpr uint32_t kBusServoRefreshMs = 50;
+constexpr uint32_t kBusServoCommandRefreshMs = 50;
 constexpr uint32_t kBusServoTorqueOffRetryMs = 100;
 constexpr uint32_t kBusServoPingIntervalMs = 100;
 constexpr uint32_t kBusServoAckTimeoutMs = 1000;
+constexpr float kBusServoAngleStickDeadzone = 0.05f;
+constexpr float kBusServoAngleDtMax = 0.05f;
 constexpr float kBusServoRawPerDegree = 4096.0f / 360.0f;
 constexpr float kBusServoCalibStickThreshold = 0.5f;
 constexpr uint32_t kBusServoCalibHoldMs = 2000u;
@@ -181,32 +182,6 @@ bool BusServoWriteTorque(bool enable) {
         return false;
     }
     return g_busServo->syncWriteTorque(kBusServoIds, enable, kBusServoCount);
-}
-
-bool BusServoWritePreset(int8_t preset) {
-    if ((g_busServo == nullptr) || (preset < 0) || (preset > 2)) {
-        return false;
-    }
-
-    const int16_t presetPos[3] = {
-        BUS_SERVO_POS_UP,
-        BUS_SERVO_POS_MID,
-        BUS_SERVO_POS_DOWN
-    };
-
-    int16_t pos[kBusServoCount];
-    for (uint8_t i = 0; i < kBusServoCount; ++i) {
-        int16_t base = presetPos[preset];
-#if BUS_SERVO_MIRROR_SECOND
-        if (i == 1u) {
-            base = (int16_t)(4095 - base);
-        }
-#endif
-        pos[i] = BusServoCorrectedPos(i, base);
-    }
-
-    return g_busServo->syncWritePos(kBusServoIds, pos, kBusServoSpeed,
-                                    kBusServoAcceleration, kBusServoCount);
 }
 
 void LoadBusServoCalibration() {
@@ -487,8 +462,6 @@ void UserStop(){
             g_busServoLastTorqueOffTick = now;
         }
     }
-    g_busServoPreset = -1;
-
     TurnLServo.stop();
     TurnRServo.stop();
 
@@ -520,45 +493,17 @@ void UserInit(){
 }
 
 /**
- * @brief 按遥控器 SC 三挡设置总线舵机目标位置
- * @note  档位变化立即下发，并每 50 ms 重发一次，丢包或舵机重新上电后可恢复
- */
-void BusServoSetPosition(SWITCH_STATE_E sw) {
-    int8_t preset;
-    switch (sw) {
-        case UP_POS:   preset = 0; break;
-        case MID_POS:  preset = 1; break;
-        case DOWN_POS: preset = 2; break;
-        default:       return;
-    }
-
-    const uint32_t now = HAL_GetTick();
-    if ((preset == g_busServoPreset) &&
-        ((now - g_busServoLastRefreshTick) < kBusServoRefreshMs)) {
-        return;
-    }
-
-    if (BusServoWriteTorque(true)) {
-        g_busServoTorqueEnabled = true;
-    }
-    BusServoWritePreset(preset);
-    g_busServoPreset = preset;
-    g_busServoLastRefreshTick = now;
-}
-
-/**
- * @brief 按角度设置两个总线舵机（0~360 度，自动应用特殊设置修正）
+ * @brief 按角度设置两个总线舵机（55~180 度，自动 clamp 并应用特殊设置修正）
  */
 void BusServoSetAngle(float angle) {
     if (g_busServo == nullptr) {
         return;
     }
 
-    while (angle >= 360.0f) {
-        angle -= 360.0f;
-    }
-    while (angle < 0.0f) {
-        angle += 360.0f;
+    if (angle < BUS_SERVO_ANGLE_MIN) {
+        angle = BUS_SERVO_ANGLE_MIN;
+    } else if (angle > BUS_SERVO_ANGLE_MAX) {
+        angle = BUS_SERVO_ANGLE_MAX;
     }
 
     int16_t pos[kBusServoCount];
@@ -571,8 +516,50 @@ void BusServoSetAngle(float angle) {
     }
     g_busServo->syncWritePos(kBusServoIds, pos, kBusServoSpeed,
                              kBusServoAcceleration, kBusServoCount);
-    g_busServoPreset = -1;
-    g_busServoLastRefreshTick = HAL_GetTick();
+}
+
+/**
+ * @brief 总线舵机角度控制
+ * @param stickUpDown 左摇杆上下，向上为正
+ * @param enable true 时积分角度；false 时保持当前角度
+ * @note  角度变化率 = 摇杆值 * BUS_SERVO_ANGLE_RATE_MAX
+ */
+void BusServoAngleControl(float stickUpDown, bool enable) {
+    static uint32_t lastTick = 0;
+    static uint32_t lastCommandTick = 0;
+    const uint32_t now = HAL_GetTick();
+
+    if (lastTick == 0u) {
+        lastTick = now;
+        lastCommandTick = now;
+        return;
+    }
+
+    float dt = (now - lastTick) * 0.001f;
+    lastTick = now;
+    if (dt > kBusServoAngleDtMax) {
+        dt = kBusServoAngleDtMax;
+    }
+
+    if (enable) {
+        float stick = stickUpDown;
+        if ((stick > -kBusServoAngleStickDeadzone) &&
+            (stick < kBusServoAngleStickDeadzone)) {
+            stick = 0.0f;
+        }
+
+        g_busServoAngle += stick * BUS_SERVO_ANGLE_RATE_MAX * dt;
+        if (g_busServoAngle < BUS_SERVO_ANGLE_MIN) {
+            g_busServoAngle = BUS_SERVO_ANGLE_MIN;
+        } else if (g_busServoAngle > BUS_SERVO_ANGLE_MAX) {
+            g_busServoAngle = BUS_SERVO_ANGLE_MAX;
+        }
+    }
+
+    if ((now - lastCommandTick) >= kBusServoCommandRefreshMs) {
+        BusServoSetAngle(g_busServoAngle);
+        lastCommandTick = now;
+    }
 }
 
 /***

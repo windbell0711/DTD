@@ -35,9 +35,15 @@ void CtrlHandle(){
         UserStop();
     } else {
         // 底盘运动始终开启
+        const bool angleControlMode =
+            (RemoteControl::rcInfo.SA == DOWN_POS) &&
+            (RemoteControl::rcInfo.SC != DOWN_POS);
+        const float rotationStick = angleControlMode
+                                        ? 0.0f
+                                        : RemoteControl::rcInfo.left_rol;
         ChassisSetVelocity(ApplyDeadzone(RemoteControl::rcInfo.right_col) * CHASSIS_MAX_LINEAR,
                            ApplyDeadzone(RemoteControl::rcInfo.right_rol) * CHASSIS_MAX_LINEAR,
-                           ApplyDeadzone(RemoteControl::rcInfo.left_rol) * CHASSIS_MAX_ROT_RPM);
+                           ApplyDeadzone(rotationStick) * CHASSIS_MAX_ROT_RPM);
         if (RemoteControl::rcInfo.SA == UP_POS) {
             // 前同步带控制
             switch (RemoteControl::rcInfo.SB) {
@@ -76,8 +82,9 @@ void CtrlHandle(){
                 case MID_POS:  pushrod_in();   break;
                 case DOWN_POS: pushrod_off();  break;
             }
-            // 总线舵机控制（SC 与后同步带共用，仅 SA 下档生效）
-            BusServoSetPosition(RemoteControl::rcInfo.SC);
+            // SC 上/中：左摇杆上下控制总线舵机角度；SC 下：保持角度，左摇杆左右恢复旋转
+            BusServoAngleControl(RemoteControl::rcInfo.left_col,
+                                 RemoteControl::rcInfo.SC != DOWN_POS);
         } else {
             // 未知危险状态
             ChassisStop();
