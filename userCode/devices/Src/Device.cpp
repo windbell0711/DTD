@@ -187,7 +187,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         return;
     if(htim == &htim10){
         // 1ms loop
-        aRGB_led_change(period);
+        switch (BusServoLinkState()) {
+            case BUS_SERVO_LINK_NONE:
+                aRGB_led_show(0xFFFF8000u);   // 总线舵机无回包：橙色常亮
+                break;
+            case BUS_SERVO_LINK_PARTIAL:
+                aRGB_led_show(0xFFFFFF00u);   // 总线舵机回包不全：黄色常亮
+                break;
+            default:
+                aRGB_led_show(0xFF00FF00u);   // 全部正常：绿色常亮
+                break;
+        }
         bsp_ADC_vccMoni();
 
         static uint32_t cnt = 0;

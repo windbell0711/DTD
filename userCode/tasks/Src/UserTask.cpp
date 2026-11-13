@@ -14,11 +14,20 @@ static uint32_t g_busServoLastTorqueOffTick = 0;
 
 namespace {
 constexpr uint8_t kBusServoCount = 2;
-constexpr uint8_t kBusServoIds[kBusServoCount] = {BUS_SERVO_ID_1, BUS_SERVO_ID_2};
+constexpr uint8_t kBusServoIds[kBusServoCount] = {
+    BUS_SERVO_ID_1, BUS_SERVO_ID_2
+};
 constexpr uint16_t kBusServoSpeed = 600;
 constexpr uint8_t kBusServoAcceleration = 30;
 constexpr uint32_t kBusServoRefreshMs = 50;
 constexpr uint32_t kBusServoTorqueOffRetryMs = 100;
+constexpr uint32_t kBusServoPingIntervalMs = 100;
+constexpr uint32_t kBusServoAckTimeoutMs = 1000;
+
+uint32_t g_busServoLastAckTick[kBusServoCount] = {0, 0};
+bool g_busServoAcked[kBusServoCount] = {false, false};
+uint8_t g_busServoPingIndex = 0;
+uint32_t g_busServoLastPingTick = 0;
 
 bool BusServoWriteTorque(bool enable) {
     if (g_busServo == nullptr) {
@@ -49,6 +58,25 @@ bool BusServoWritePreset(int8_t preset) {
     return g_busServo->syncWritePos(kBusServoIds, pos, kBusServoSpeed,
                                     kBusServoAcceleration, kBusServoCount);
 }
+}
+
+BUS_SERVO_LINK_STATE_E BusServoLinkState() {
+    const uint32_t now = HAL_GetTick();
+    uint8_t onlineCount = 0;
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        if (g_busServoAcked[i] &&
+            ((now - g_busServoLastAckTick[i]) <= kBusServoAckTimeoutMs)) {
+            onlineCount++;
+        }
+    }
+
+    if (onlineCount == 0) {
+        return BUS_SERVO_LINK_NONE;
+    }
+    if (onlineCount < kBusServoCount) {
+        return BUS_SERVO_LINK_PARTIAL;
+    }
+    return BUS_SERVO_LINK_ALL;
 }
 
 PID_Regulator_t userPidRegulator = {
@@ -150,7 +178,10 @@ void UserInit(){
     // UART 已初始化，构造总线舵机对象
     static BusServo servo(BUS_SERVO_UART);
     g_busServo = &servo;
+    // Re-apply the bus configuration after the object is constructed.
+    servo.setBaud(BUS_SERVO_BAUD);
     g_busServoLastTorqueOffTick = HAL_GetTick() - kBusServoTorqueOffRetryMs;
+    g_busServoLastPingTick = HAL_GetTick() - kBusServoPingIntervalMs;
 }
 
 /**
@@ -189,4 +220,18 @@ void UserHandle(){
     TurnRServo.Handle();
     ShovelLServo.Handle();
     ShovelRServo.Handle();
+
+    // 轮流 ping 两个总线舵机，以最后成功回包时间判断在线状态
+    if (g_busServo != nullptr) {
+        const uint32_t now = HAL_GetTick();
+        if ((now - g_busServoLastPingTick) >= kBusServoPingIntervalMs) {
+            if (g_busServo->ping(kBusServoIds[g_busServoPingIndex])) {
+                g_busServoAcked[g_busServoPingIndex] = true;
+                g_busServoLastAckTick[g_busServoPingIndex] = now;
+            }
+            g_busServoPingIndex =
+                (uint8_t)((g_busServoPingIndex + 1u) % kBusServoCount);
+            g_busServoLastPingTick = now;
+        }
+    }
 }

@@ -33,10 +33,17 @@
 
 extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
 
+typedef enum {
+    BUS_SERVO_LINK_NONE = 0,    // 总线舵机全部无回包
+    BUS_SERVO_LINK_PARTIAL,     // 部分舵机回包
+    BUS_SERVO_LINK_ALL          // 全部舵机在线
+} BUS_SERVO_LINK_STATE_E;
+
 /*外部函数声明-------------------------------------------------------------*/
 
 void UserStop();
 void UserHandle();
 void UserInit();
 void BusServoSetPosition(SWITCH_STATE_E sw);
+BUS_SERVO_LINK_STATE_E BusServoLinkState();
 #endif //RM_FRAME_C_USERTASK_H

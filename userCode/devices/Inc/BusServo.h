@@ -39,6 +39,9 @@ public:
     /** 检测某个 ID 的舵机是否在线 */
     bool ping(uint8_t id);
 
+    /** Reconfigure the USART (also used after construction to reapply bus settings). */
+    void setBaud(uint32_t baud);
+
     /** 写目标位置（0~4095 一圈），附速度和加速度 */
     bool writePos(uint8_t id, int16_t pos, uint16_t speed = 1500, uint8_t acc = 50);
 
@@ -68,11 +71,20 @@ public:
     bool setID(uint8_t oldId, uint8_t newId);
 
 private:
-    bool sendFrame(uint8_t id, uint8_t instr, const uint8_t *params, uint8_t n);
-    bool recvAck(uint8_t id, uint8_t *params, uint8_t &n);
+    bool sendFrame(uint8_t id, uint8_t instr, const uint8_t *params, uint8_t n,
+                   bool expectAck = true);
+    bool recvAck(uint8_t id, uint8_t *params, uint8_t &n, uint8_t maxParams,
+                 bool *servoError = nullptr);
+    bool startRxDma();
+    void stopRxDma();
+    uint8_t rxDmaCount() const;
+    bool parseAckFrame(uint8_t id, const volatile uint8_t *buf, uint8_t count,
+                       uint8_t *params, uint8_t &n, uint8_t maxParams,
+                       bool &servoError) const;
     bool writeReg(uint8_t id, uint8_t addr, uint8_t value);
 
     UART_HandleTypeDef *uart_;
+    volatile uint8_t rxBuf_[32];
 };
 
 #endif // RM_FRAME_C_BUS_SERVO_H
