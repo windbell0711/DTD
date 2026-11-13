@@ -50,8 +50,14 @@ typedef struct {
     uint32_t robot_ID;
     uint32_t yaw_zero;
     uint32_t pitch_zero;
+    uint32_t busServoCalibMagic;
+    int16_t busServoCalibOffset[2];
+    int16_t busServoCalibReferenceDeg;
+    uint16_t busServoCalibReserved;
     uint32_t pat[125];
 }flash_data_t;
+
+#define BUS_SERVO_CALIB_MAGIC 0x4253434Cu   // BSCL
 
 typedef struct {
     float x,y,z;
@@ -72,7 +78,13 @@ protected:
 
 /*结构体成员取值定义组------------------------------------------------------*/
 /*外部变量声明-------------------------------------------------------------*/
+extern flash_data_t flashData;
+
 /*外部函数声明-------------------------------------------------------------*/
+void bsp_flash_write(flash_data_t *_flashData);
+void bsp_flash_read(flash_data_t *_flashData);
+float bsp_BuzzerOn(float _freq, float _targetVolPct);
+void bsp_BuzzerOff();
 
 
 

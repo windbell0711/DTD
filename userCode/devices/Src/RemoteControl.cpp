@@ -67,6 +67,14 @@ static SWITCH_STATE_E classifySwitch(int32_t raw)
     return MID_POS;
 }
 
+/**
+ * @brief 两档开关判档：以中位原始值为界，避免端点值有偏差时被判成 MID_POS
+ */
+static SWITCH_STATE_E classifyTwoPositionSwitch(int32_t raw)
+{
+    return (raw < RC_SW_MID_RAW) ? UP_POS : DOWN_POS;
+}
+
 void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rc_ctrl.rc.ch[0] = (sbus_buf[1] | sbus_buf[2] << 8) & 0x07ff;       // Channel 1
     rc_ctrl.rc.ch[1] = (sbus_buf[2] >> 3 | sbus_buf[3] << 5) & 0x07ff;  // Channel 2
@@ -89,7 +97,8 @@ void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rc_ctrl.rc.ch[3] -= RC_TRIM_CH3;
 
     rcInfo.right_rol = rc_ctrl.rc.ch[0]/671.0f;
-    rcInfo.left_col = rc_ctrl.rc.ch[1]/671.0f;
+    // ET08 实测：左摇杆向上为负、右摇杆向上为正；这里统一成“向上为正”
+    rcInfo.left_col = -rc_ctrl.rc.ch[1]/671.0f;
 
     rcInfo.right_col = rc_ctrl.rc.ch[2]/671.0f;
     rcInfo.left_rol = rc_ctrl.rc.ch[3]/671.0f;
@@ -101,8 +110,9 @@ void RemoteControl::sbus_to_rc(const volatile uint8_t *sbus_buf) {
     rcInfo.optional[1] = rc_ctrl.rc.optional[1];
 
     // 增加自定义配置
-    rcInfo.SA = classifySwitch((int32_t)rcInfo.optional[0]);
-    rcInfo.SD = classifySwitch((int32_t)rcInfo.optional[1]);
+    // 默认辅助2(通道7)=SA、辅助3(通道8)=SD；若实机接反，交换这两行
+    rcInfo.SA = classifyTwoPositionSwitch((int32_t)rcInfo.optional[0]);
+    rcInfo.SD = classifyTwoPositionSwitch((int32_t)rcInfo.optional[1]);
 
     lastFrameTick = HAL_GetTick();
 }

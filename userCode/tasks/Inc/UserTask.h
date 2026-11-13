@@ -45,5 +45,7 @@ void UserStop();
 void UserHandle();
 void UserInit();
 void BusServoSetPosition(SWITCH_STATE_E sw);
+void BusServoSetAngle(float angle);
+bool BusServoCalibrationFeedbackColor(uint32_t *color);
 BUS_SERVO_LINK_STATE_E BusServoLinkState();
 #endif //RM_FRAME_C_USERTASK_H

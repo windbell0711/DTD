@@ -157,7 +157,7 @@ void bsp_ADC_vccMoni(){
 flash_data_t flashData;
 void bsp_flash_write(flash_data_t *_flashData){
     HAL_FLASH_Unlock();
-    FLASH_EraseInitTypeDef eraseInit;
+    FLASH_EraseInitTypeDef eraseInit = {0};
     eraseInit.TypeErase = FLASH_TYPEERASE_SECTORS;
     eraseInit.Sector = FLASH_SECTOR_9;
     eraseInit.NbSectors = 1;
@@ -165,15 +165,16 @@ void bsp_flash_write(flash_data_t *_flashData){
     HAL_FLASHEx_Erase(&eraseInit,NULL);
     uint32_t flash_ptr = FLASH_SECTOR_9_ADDRESS;
 
-    for (uint32_t *ptr = (uint32_t*)_flashData;ptr < (uint32_t*)(sizeof(flash_data_t)/4 + _flashData);ptr++){
-        HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD,flash_ptr,*ptr);
+    const uint32_t *src = (const uint32_t*)_flashData;
+    const uint32_t wordCount = sizeof(flash_data_t) / sizeof(uint32_t);
+    for (uint32_t i = 0; i < wordCount; ++i) {
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, flash_ptr, src[i]);
         flash_ptr += 4;
     }
     HAL_FLASH_Lock();
 }
 void bsp_flash_read(flash_data_t *_flashData){
-    uint32_t flash_ptr = FLASH_SECTOR_9_ADDRESS;
-    memcpy(_flashData,(uint32_t*)FLASH_SECTOR_9_ADDRESS,sizeof(flash_data_t)/4);
+    memcpy(_flashData, (const void*)FLASH_SECTOR_9_ADDRESS, sizeof(flash_data_t));
 }
 
 
@@ -187,16 +188,21 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         return;
     if(htim == &htim10){
         // 1ms loop
-        switch (BusServoLinkState()) {
-            case BUS_SERVO_LINK_NONE:
-                aRGB_led_show(0xFFFF8000u);   // 总线舵机无回包：橙色常亮
-                break;
-            case BUS_SERVO_LINK_PARTIAL:
-                aRGB_led_show(0xFFFFFF00u);   // 总线舵机回包不全：黄色常亮
-                break;
-            default:
-                aRGB_led_show(0xFF00FF00u);   // 全部正常：绿色常亮
-                break;
+        uint32_t feedbackColor = 0;
+        if (BusServoCalibrationFeedbackColor(&feedbackColor)) {
+            aRGB_led_show(feedbackColor);     // 特殊设置结果：蓝灯/红灯闪烁
+        } else {
+            switch (BusServoLinkState()) {
+                case BUS_SERVO_LINK_NONE:
+                    aRGB_led_show(0xFFFF8000u);   // 总线舵机无回包：橙色常亮
+                    break;
+                case BUS_SERVO_LINK_PARTIAL:
+                    aRGB_led_show(0xFFFFFF00u);   // 总线舵机回包不全：黄色常亮
+                    break;
+                default:
+                    aRGB_led_show(0xFF00FF00u);   // 全部正常：绿色常亮
+                    break;
+            }
         }
         bsp_ADC_vccMoni();
 
