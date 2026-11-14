@@ -48,12 +48,12 @@ void CtrlHandle(){
             // 前同步带控制
             switch (RemoteControl::rcInfo.SB) {
             case UP_POS:
-                TurnLServo.SetTargetSpeed(90.0f);
-                TurnRServo.SetTargetSpeed(-90.0f);
+                TurnLServo.SetTargetSpeed(SERVO_SPEED_PERC);
+                TurnRServo.SetTargetSpeed(-SERVO_SPEED_PERC);
                 break;
             case MID_POS:
-                TurnLServo.SetTargetSpeed(-90.0f);
-                TurnRServo.SetTargetSpeed(90.0f);
+                TurnLServo.SetTargetSpeed(-SERVO_SPEED_PERC);
+                TurnRServo.SetTargetSpeed(SERVO_SPEED_PERC);
                 break;
             case DOWN_POS:
                 TurnLServo.SetTargetSpeed(0.0f);
@@ -63,12 +63,12 @@ void CtrlHandle(){
             // 后同步带控制
             switch (RemoteControl::rcInfo.SC) {
                 case UP_POS:
-                    ShovelLServo.SetTargetSpeed(90.0f);
-                    ShovelRServo.SetTargetSpeed(-90.0f);
+                    ShovelLServo.SetTargetSpeed(SERVO_SPEED_PERC);
+                    ShovelRServo.SetTargetSpeed(-SERVO_SPEED_PERC);
                     break;
                 case MID_POS:
-                    ShovelLServo.SetTargetSpeed(-90.0f);
-                    ShovelRServo.SetTargetSpeed(90.0f);
+                    ShovelLServo.SetTargetSpeed(-SERVO_SPEED_PERC);
+                    ShovelRServo.SetTargetSpeed(SERVO_SPEED_PERC);
                     break;
                 case DOWN_POS:
                     ShovelLServo.SetTargetSpeed(0.0f);

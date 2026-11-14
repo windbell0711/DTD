@@ -27,7 +27,7 @@
 #define BUS_SERVO_ID_1              1
 #define BUS_SERVO_ID_2              2
 #define BUS_SERVO_MIRROR_SECOND     1
-#define BUS_SERVO_ANGLE_MIN         57.2f
+#define BUS_SERVO_ANGLE_MIN         50.0f
 #define BUS_SERVO_ANGLE_MAX         180.0f
 #define BUS_SERVO_ANGLE_INIT        90.0f    // 上电/首次进入控制时的目标角度
 #define BUS_SERVO_ANGLE_RATE_MAX    60.0f    // 度/秒，满杆时的角度变化率
@@ -45,7 +45,10 @@ extern float g_busServoAngle;
 #define PLATE_POS_LOW_MS            0u
 #define PLATE_POS_MID_MS            (PLATE_MOVE_MS / 2u)
 #define PLATE_POS_HIGH_MS           (PLATE_MOVE_MS)
+
 extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
+
+#define SERVO_SPEED_PERC  99
 
 typedef enum {
     BUS_SERVO_LINK_NONE = 0,    // 总线舵机全部无回包
