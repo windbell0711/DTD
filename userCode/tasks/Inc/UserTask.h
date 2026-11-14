@@ -37,11 +37,11 @@ extern float g_busServoAngle;
 /* ---------- plate (rack) servo parameters ---------- */
 #define PLATE_SERVO_ID              SERVO_ID_5   /* PWM5 -> PC6 (TIM8_CH1) */
 #define PLATE_SPEED                 90.0f
-#define PLATE_MOVE_MS               2000u        /* full travel time, measure and tune */
-#define PLATE_DIR_EXTEND            (-1)         /* swap with RETRACT if direction reversed */
-#define PLATE_DIR_RETRACT           (+1)
+#define PLATE_MOVE_MS               4500u        /* full travel time, measure and tune */
+#define PLATE_DIR_EXTEND            (+1)         /* swap with RETRACT if direction reversed */
+#define PLATE_DIR_RETRACT           (-1)
 #define PLATE_HOME_SPEED            90.0f
-#define PLATE_HOME_MS               (PLATE_MOVE_MS + 200u)
+#define PLATE_HOME_MS               (PLATE_MOVE_MS)
 #define PLATE_POS_LOW_MS            0u
 #define PLATE_POS_MID_MS            (PLATE_MOVE_MS / 2u)
 #define PLATE_POS_HIGH_MS           (PLATE_MOVE_MS)

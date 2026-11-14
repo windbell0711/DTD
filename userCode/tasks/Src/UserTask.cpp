@@ -497,9 +497,9 @@ static void PlateHandle() {
 void PlateSetSwitch(SWITCH_STATE_E sw) {
     int8_t code;
     switch (sw) {
-        case UP_POS:   code = 0; break;
-        case MID_POS:  code = 1; break;
-        case DOWN_POS: code = 2; break;
+        case UP_POS:   code = 0; break;   /* 上：出去 */
+        case MID_POS:  code = 1; break;   /* 中：收回来 */
+        case DOWN_POS: code = 2; break;   /* 下：没反应 */
         default:       return;
     }
 
@@ -507,16 +507,26 @@ void PlateSetSwitch(SWITCH_STATE_E sw) {
         return;
     }
 
-    if (g_plateSw >= 0) {
-        if (code == 0) {
-            PlateGoto(PLATE_POS_HIGH_MS);   /* 往外 */
-        } else if (code == 1) {
-            PlateGoto(PLATE_POS_LOW_MS);    /* 收回 */
-        } else {
-            /* 下档：不动作 */
-        }
-    }
+    const int8_t prev = g_plateSw;
     g_plateSw = code;
+
+    /* 上电后第一次只记录档位，不动作 */
+    if (prev < 0) {
+        return;
+    }
+
+    /* 动作进行中切档：立即停止，本次不执行新动作 */
+    if ((g_plateState == PLATE_MOVING) || (g_plateState == PLATE_HOMING)) {
+        PlateStop();
+        return;
+    }
+
+    if (code == 0) {
+        PlateGoto(PLATE_POS_HIGH_MS);   /* 出去 */
+    } else if (code == 1) {
+        PlateGoto(PLATE_POS_LOW_MS);    /* 收回来 */
+    }
+    /* code == 2（下档）：不动作 */
 }
 // ================= end plate =================
 

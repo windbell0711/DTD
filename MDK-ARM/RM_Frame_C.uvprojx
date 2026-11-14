@@ -699,6 +699,11 @@
               <FileType>8</FileType>
               <FilePath>..\userCode\devices\Src\RemoteControl.cpp</FilePath>
             </File>
+            <File>
+              <FileName>PushRod.cpp</FileName>
+              <FileType>8</FileType>
+              <FilePath>..\userCode\devices\Src\PushRod.cpp</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
