@@ -645,7 +645,7 @@ void UserInit(){
 }
 
 /**
- * @brief 按角度设置两个总线舵机（55~180 度，自动 clamp 并应用特殊设置修正）
+ * @brief 按角度设置两个总线舵机（自动 clamp 并应用特殊设置修正）
  */
 void BusServoSetAngle(float angle) {
     if (g_busServo == nullptr) {
