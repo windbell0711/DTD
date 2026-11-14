@@ -34,6 +34,17 @@
 
 extern float g_busServoAngle;
 
+/* ---------- plate (rack) servo parameters ---------- */
+#define PLATE_SERVO_ID              SERVO_ID_5   /* PWM5 -> PC6 (TIM8_CH1) */
+#define PLATE_SPEED                 90.0f
+#define PLATE_MOVE_MS               2000u        /* full travel time, measure and tune */
+#define PLATE_DIR_EXTEND            (-1)         /* swap with RETRACT if direction reversed */
+#define PLATE_DIR_RETRACT           (+1)
+#define PLATE_HOME_SPEED            90.0f
+#define PLATE_HOME_MS               (PLATE_MOVE_MS + 200u)
+#define PLATE_POS_LOW_MS            0u
+#define PLATE_POS_MID_MS            (PLATE_MOVE_MS / 2u)
+#define PLATE_POS_HIGH_MS           (PLATE_MOVE_MS)
 extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
 
 typedef enum {
@@ -48,6 +59,7 @@ void UserStop();
 void UserHandle();
 void UserInit();
 void BusServoSetAngle(float angle);
+void PlateSetSwitch(SWITCH_STATE_E sw);
 void BusServoAngleControl(float stickUpDown, bool enable);
 bool BusServoCalibrationFeedbackColor(uint32_t *color);
 BUS_SERVO_LINK_STATE_E BusServoLinkState();

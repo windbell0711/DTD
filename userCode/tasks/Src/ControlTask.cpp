@@ -85,6 +85,9 @@ void CtrlHandle(){
             // SC 上/中：左摇杆上下控制总线舵机角度；SC 下：保持角度，左摇杆左右恢复旋转
             BusServoAngleControl(RemoteControl::rcInfo.left_col,
                                  RemoteControl::rcInfo.SC != DOWN_POS);
+
+            // plate: SC up = out, SC mid = in, SC down = no action
+            PlateSetSwitch(RemoteControl::rcInfo.SC);
         } else {
             // 未知危险状态
             ChassisStop();

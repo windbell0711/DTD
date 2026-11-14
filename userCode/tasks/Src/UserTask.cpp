@@ -388,6 +388,138 @@ BUS_SERVO_LINK_STATE_E BusServoLinkState() {
     return BUS_SERVO_LINK_ALL;
 }
 
+// ================= plate (rack) servo: open-loop position by time =================
+static Servo *g_plateServo = nullptr;
+static uint32_t g_plateStopTick = 0;
+static int8_t g_plateSw = -1;
+
+enum PlateState {
+    PLATE_IDLE = 0,
+    PLATE_HOMING,
+    PLATE_MOVING
+};
+
+static PlateState g_plateState = PLATE_IDLE;
+static bool g_platePosUnknown = true;
+static uint32_t g_platePosMs = 0;
+static uint32_t g_plateTargetMs = 0;
+static uint32_t g_plateMoveMs = 0;
+static int8_t g_plateMoveDir = 0;
+
+static void PlateDrive(float speed) {
+    if (g_plateServo != nullptr) {
+        g_plateServo->SetTargetSpeed(speed);
+    }
+}
+
+static void PlateBeginMove() {
+    if (g_plateServo == nullptr) {
+        return;
+    }
+    if (g_plateTargetMs == g_platePosMs) {
+        g_plateState = PLATE_IDLE;
+        return;
+    }
+    if (g_plateTargetMs > g_platePosMs) {
+        g_plateMoveDir = PLATE_DIR_EXTEND;
+        g_plateMoveMs  = g_plateTargetMs - g_platePosMs;
+    } else {
+        g_plateMoveDir = PLATE_DIR_RETRACT;
+        g_plateMoveMs  = g_platePosMs - g_plateTargetMs;
+    }
+    PlateDrive((float)g_plateMoveDir * PLATE_SPEED);
+    g_plateStopTick = HAL_GetTick() + g_plateMoveMs;
+    g_plateState = PLATE_MOVING;
+}
+
+static void PlateBeginHoming() {
+    if (g_plateServo == nullptr) {
+        return;
+    }
+    PlateDrive((float)PLATE_DIR_RETRACT * PLATE_HOME_SPEED);
+    g_plateStopTick = HAL_GetTick() + PLATE_HOME_MS;
+    g_plateState = PLATE_HOMING;
+}
+
+static void PlateGoto(uint32_t targetMs) {
+    if (g_plateServo == nullptr) {
+        return;
+    }
+    if (targetMs > PLATE_POS_HIGH_MS) {
+        targetMs = PLATE_POS_HIGH_MS;
+    }
+    g_plateTargetMs = targetMs;
+    if (g_platePosUnknown) {
+        PlateBeginHoming();
+        return;
+    }
+    PlateBeginMove();
+}
+
+static void PlateStop() {
+    g_plateStopTick = 0;
+    g_plateState = PLATE_IDLE;
+    g_plateMoveDir = 0;
+    g_platePosUnknown = true;
+    PlateDrive(0.0f);
+    if (g_plateServo != nullptr) {
+        g_plateServo->Handle();
+    }
+}
+
+static void PlateHandle() {
+    const uint32_t now = HAL_GetTick();
+    if ((g_plateStopTick != 0) && (now >= g_plateStopTick)) {
+        g_plateStopTick = 0;
+        PlateDrive(0.0f);
+        if (g_plateState == PLATE_HOMING) {
+            g_platePosUnknown = false;
+            g_platePosMs = 0;
+            PlateBeginMove();
+        } else if (g_plateState == PLATE_MOVING) {
+            g_platePosMs = g_plateTargetMs;
+            g_plateState = PLATE_IDLE;
+        } else {
+            g_plateState = PLATE_IDLE;
+        }
+    }
+    if (g_plateServo != nullptr) {
+        g_plateServo->Handle();
+    }
+}
+
+/**
+ * @brief SC 三档 -> 齿条动作
+ *   SC 上 : 往外伸出（走到高位）
+ *   SC 中 : 收回（走回低位）
+ *   SC 下 : 不动作
+ */
+void PlateSetSwitch(SWITCH_STATE_E sw) {
+    int8_t code;
+    switch (sw) {
+        case UP_POS:   code = 0; break;
+        case MID_POS:  code = 1; break;
+        case DOWN_POS: code = 2; break;
+        default:       return;
+    }
+
+    if (code == g_plateSw) {
+        return;
+    }
+
+    if (g_plateSw >= 0) {
+        if (code == 0) {
+            PlateGoto(PLATE_POS_HIGH_MS);   /* 往外 */
+        } else if (code == 1) {
+            PlateGoto(PLATE_POS_LOW_MS);    /* 收回 */
+        } else {
+            /* 下档：不动作 */
+        }
+    }
+    g_plateSw = code;
+}
+// ================= end plate =================
+
 PID_Regulator_t userPidRegulator = {
         .kp = 60,
         .ki = 0,
@@ -467,12 +599,23 @@ void UserStop(){
 
     ShovelLServo.stop();
     ShovelRServo.stop();
+
+    PlateStop();
 }
 
 /***
  * 在这里写入初始化内容
  */
 void UserInit(){
+    // plate servo on PWM5 (PC6 / TIM8_CH1): create and start homing
+    static SERVO_INIT_T plateInit = {SPEED_360, PLATE_SERVO_ID, 0, 0, 180};
+    static Servo plate(&plateInit);
+    g_plateServo = &plate;
+    g_plateServo->SetTargetSpeed(0.0f);
+    g_plateServo->Handle();
+    g_plateTargetMs = PLATE_POS_LOW_MS;
+    g_platePosUnknown = true;
+    PlateBeginHoming();
     TurnLServo.SetTargetSpeed(0.0f);
     TurnRServo.SetTargetSpeed(0.0f);
     ShovelLServo.SetTargetSpeed(0.0f);
@@ -567,6 +710,7 @@ void BusServoAngleControl(float stickUpDown, bool enable) {
  */
 void UserHandle(){
     UserMotor.Handle();
+    PlateHandle();          // plate servo state machine
     TurnLServo.Handle();
     TurnRServo.Handle();
     ShovelLServo.Handle();
