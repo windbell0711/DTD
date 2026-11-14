@@ -388,21 +388,19 @@ BUS_SERVO_LINK_STATE_E BusServoLinkState() {
     return BUS_SERVO_LINK_ALL;
 }
 
-// ================= plate (rack) servo: open-loop position by time =================
+// ================= plate (rack) servo: open loop by time, NO homing =================
 static Servo *g_plateServo = nullptr;
 static uint32_t g_plateStopTick = 0;
 static int8_t g_plateSw = -1;
 
 enum PlateState {
     PLATE_IDLE = 0,
-    PLATE_HOMING,
     PLATE_MOVING
 };
 
 static PlateState g_plateState = PLATE_IDLE;
-static bool g_platePosUnknown = true;
-static uint32_t g_platePosMs = 0;
-static uint32_t g_plateTargetMs = 0;
+static int32_t g_platePosMs = 0;
+static int32_t g_plateTargetMs = 0;
 static uint32_t g_plateMoveMs = 0;
 static int8_t g_plateMoveDir = 0;
 
@@ -422,45 +420,54 @@ static void PlateBeginMove() {
     }
     if (g_plateTargetMs > g_platePosMs) {
         g_plateMoveDir = PLATE_DIR_EXTEND;
-        g_plateMoveMs  = g_plateTargetMs - g_platePosMs;
+        g_plateMoveMs  = (uint32_t)(g_plateTargetMs - g_platePosMs);
     } else {
         g_plateMoveDir = PLATE_DIR_RETRACT;
-        g_plateMoveMs  = g_platePosMs - g_plateTargetMs;
+        g_plateMoveMs  = (uint32_t)(g_platePosMs - g_plateTargetMs);
     }
     PlateDrive((float)g_plateMoveDir * PLATE_SPEED);
     g_plateStopTick = HAL_GetTick() + g_plateMoveMs;
     g_plateState = PLATE_MOVING;
 }
 
-static void PlateBeginHoming() {
+static void PlateGoto(int32_t targetMs) {
     if (g_plateServo == nullptr) {
         return;
     }
-    PlateDrive((float)PLATE_DIR_RETRACT * PLATE_HOME_SPEED);
-    g_plateStopTick = HAL_GetTick() + PLATE_HOME_MS;
-    g_plateState = PLATE_HOMING;
-}
-
-static void PlateGoto(uint32_t targetMs) {
-    if (g_plateServo == nullptr) {
-        return;
+    if (targetMs > (int32_t)PLATE_POS_HIGH_MS) {
+        targetMs = (int32_t)PLATE_POS_HIGH_MS;
     }
-    if (targetMs > PLATE_POS_HIGH_MS) {
-        targetMs = PLATE_POS_HIGH_MS;
+    if (targetMs < 0) {
+        targetMs = 0;
     }
     g_plateTargetMs = targetMs;
-    if (g_platePosUnknown) {
-        PlateBeginHoming();
-        return;
-    }
     PlateBeginMove();
 }
 
 static void PlateStop() {
-    g_plateStopTick = 0;
+    /* 若正在运动，把已走过的时间补进位置估计 */
+    if ((g_plateState == PLATE_MOVING) && (g_plateStopTick != 0u)) {
+        const uint32_t now = HAL_GetTick();
+        if (now < g_plateStopTick) {
+            const uint32_t remain = g_plateStopTick - now;
+            const int32_t done = (int32_t)(g_plateMoveMs - remain);
+            if (g_plateMoveDir == PLATE_DIR_EXTEND) {
+                g_platePosMs += done;
+            } else {
+                g_platePosMs -= done;
+            }
+            if (g_platePosMs > (int32_t)PLATE_POS_HIGH_MS) {
+                g_platePosMs = (int32_t)PLATE_POS_HIGH_MS;
+            }
+            if (g_platePosMs < 0) {
+                g_platePosMs = 0;
+            }
+        }
+    }
+
+    g_plateStopTick = 0u;
     g_plateState = PLATE_IDLE;
     g_plateMoveDir = 0;
-    g_platePosUnknown = true;
     PlateDrive(0.0f);
     if (g_plateServo != nullptr) {
         g_plateServo->Handle();
@@ -469,17 +476,11 @@ static void PlateStop() {
 
 static void PlateHandle() {
     const uint32_t now = HAL_GetTick();
-    if ((g_plateStopTick != 0) && (now >= g_plateStopTick)) {
-        g_plateStopTick = 0;
+    if ((g_plateStopTick != 0u) && (now >= g_plateStopTick)) {
+        g_plateStopTick = 0u;
         PlateDrive(0.0f);
-        if (g_plateState == PLATE_HOMING) {
-            g_platePosUnknown = false;
-            g_platePosMs = 0;
-            PlateBeginMove();
-        } else if (g_plateState == PLATE_MOVING) {
+        if (g_plateState == PLATE_MOVING) {
             g_platePosMs = g_plateTargetMs;
-            g_plateState = PLATE_IDLE;
-        } else {
             g_plateState = PLATE_IDLE;
         }
     }
@@ -490,16 +491,17 @@ static void PlateHandle() {
 
 /**
  * @brief SC 三档 -> 齿条动作
- *   SC 上 : 往外伸出（走到高位）
- *   SC 中 : 收回（走回低位）
+ *   SC 上 : 出去（走到高位）
+ *   SC 中 : 收回来（走回低位）
  *   SC 下 : 不动作
+ *   动作进行中切档：立即停止，本次不执行新动作
  */
 void PlateSetSwitch(SWITCH_STATE_E sw) {
     int8_t code;
     switch (sw) {
-        case UP_POS:   code = 0; break;   /* 上：出去 */
-        case MID_POS:  code = 1; break;   /* 中：收回来 */
-        case DOWN_POS: code = 2; break;   /* 下：没反应 */
+        case UP_POS:   code = 0; break;
+        case MID_POS:  code = 1; break;
+        case DOWN_POS: code = 2; break;
         default:       return;
     }
 
@@ -510,23 +512,20 @@ void PlateSetSwitch(SWITCH_STATE_E sw) {
     const int8_t prev = g_plateSw;
     g_plateSw = code;
 
-    /* 上电后第一次只记录档位，不动作 */
     if (prev < 0) {
-        return;
+        return;                       /* 上电第一次只记录 */
     }
 
-    /* 动作进行中切档：立即停止，本次不执行新动作 */
-    if ((g_plateState == PLATE_MOVING) || (g_plateState == PLATE_HOMING)) {
-        PlateStop();
+    if (g_plateState == PLATE_MOVING) {
+        PlateStop();                  /* 中途切档：先停 */
         return;
     }
 
     if (code == 0) {
-        PlateGoto(PLATE_POS_HIGH_MS);   /* 出去 */
+        PlateGoto((int32_t)PLATE_POS_HIGH_MS);
     } else if (code == 1) {
-        PlateGoto(PLATE_POS_LOW_MS);    /* 收回来 */
+        PlateGoto(0);
     }
-    /* code == 2（下档）：不动作 */
 }
 // ================= end plate =================
 
@@ -617,15 +616,15 @@ void UserStop(){
  * 在这里写入初始化内容
  */
 void UserInit(){
-    // plate servo on PWM5 (PC6 / TIM8_CH1): create and start homing
+    // plate servo on PWM5 (PC6 / TIM8_CH1): no homing, assume start at low position
     static SERVO_INIT_T plateInit = {SPEED_360, PLATE_SERVO_ID, 0, 0, 180};
     static Servo plate(&plateInit);
     g_plateServo = &plate;
     g_plateServo->SetTargetSpeed(0.0f);
     g_plateServo->Handle();
+    g_platePosMs = PLATE_POS_LOW_MS;
     g_plateTargetMs = PLATE_POS_LOW_MS;
-    g_platePosUnknown = true;
-    PlateBeginHoming();
+    g_plateState = PLATE_IDLE;
     TurnLServo.SetTargetSpeed(0.0f);
     TurnRServo.SetTargetSpeed(0.0f);
     ShovelLServo.SetTargetSpeed(0.0f);
