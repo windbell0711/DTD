@@ -7,12 +7,46 @@
 /**
  * @brief 摇杆死区：中位附近的噪声直接归零，避免松手后车自己爬
  */
-static float ApplyDeadzone(float value) {
-    const float deadzone = 0.02f;
+static float ApplyDeadzone(float value, float deadzone) {
     if ((value > -deadzone) && (value < deadzone)) {
         return 0.0f;
     }
     return value;
+}
+
+/**
+ * @brief 同步带一对舵机：上档往外、中档停、下档往里（镜像安装）
+ */
+static void BeltPair(SWITCH_STATE_E sw, Servo &left, Servo &right) {
+    switch (sw) {
+        case UP_POS:
+            left.SetTargetSpeed((float)SERVO_SPEED_PERC);
+            right.SetTargetSpeed(-(float)SERVO_SPEED_PERC);
+            break;
+        case MID_POS:
+            left.SetTargetSpeed(0.0f);
+            right.SetTargetSpeed(0.0f);
+            break;
+        case DOWN_POS:
+            left.SetTargetSpeed(-(float)SERVO_SPEED_PERC);
+            right.SetTargetSpeed((float)SERVO_SPEED_PERC);
+            break;
+        default:
+            break;
+    }
+}
+
+/**
+ * @brief 推杆：左摇杆上下，阈值大，避免误触
+ */
+static void PushrodByStick(float upDown) {
+    if (upDown > PLATE_PUSHROD_THRESHOLD) {
+        pushrod_out();
+    } else if (upDown < -PLATE_PUSHROD_THRESHOLD) {
+        pushrod_in();
+    } else {
+        pushrod_off();
+    }
 }
 
 void CtrlHandle(){
@@ -30,84 +64,43 @@ void CtrlHandle(){
     }
 
     if (RemoteControl::rcInfo.SD != UP_POS) {
-        // SD 下档急停模式，改过了
+        // SD 下档：失能
         ChassisStop();
         UserStop();
-    } else {
-        // 底盘运动始终开启
-        const bool angleControlMode =
-            (RemoteControl::rcInfo.SA == DOWN_POS) &&
-            (RemoteControl::rcInfo.SC != DOWN_POS);
-        const float rotationStick = angleControlMode
-                                        ? 0.0f
-                                        : RemoteControl::rcInfo.left_rol;
-        ChassisSetVelocity(ApplyDeadzone(RemoteControl::rcInfo.right_col) * CHASSIS_MAX_LINEAR,
-                           ApplyDeadzone(RemoteControl::rcInfo.right_rol) * CHASSIS_MAX_LINEAR,
-                           ApplyDeadzone(rotationStick) * CHASSIS_MAX_ROT_RPM);
-        if (RemoteControl::rcInfo.SA == UP_POS) {
-            // 前同步带控制
-            switch (RemoteControl::rcInfo.SB) {
-            case UP_POS:
-                TurnLServo.SetTargetSpeed(SERVO_SPEED_PERC);
-                TurnRServo.SetTargetSpeed(-SERVO_SPEED_PERC);
-                break;
-            case MID_POS:
-                TurnLServo.SetTargetSpeed(-SERVO_SPEED_PERC);
-                TurnRServo.SetTargetSpeed(SERVO_SPEED_PERC);
-                break;
-            case DOWN_POS:
-                TurnLServo.SetTargetSpeed(0.0f);
-                TurnRServo.SetTargetSpeed(0.0f);
-                break;
-            }
-            // 后同步带控制
-            switch (RemoteControl::rcInfo.SC) {
-                case UP_POS:
-                    ShovelLServo.SetTargetSpeed(SERVO_SPEED_PERC);
-                    ShovelRServo.SetTargetSpeed(-SERVO_SPEED_PERC);
-                    break;
-                case MID_POS:
-                    ShovelLServo.SetTargetSpeed(-SERVO_SPEED_PERC);
-                    ShovelRServo.SetTargetSpeed(SERVO_SPEED_PERC);
-                    break;
-                case DOWN_POS:
-                    ShovelLServo.SetTargetSpeed(0.0f);
-                    ShovelRServo.SetTargetSpeed(0.0f);
-                    break;
-            }
-        } else if (RemoteControl::rcInfo.SA == DOWN_POS) {
-            // 推杆控制
-            switch (RemoteControl::rcInfo.SB) {
-                case UP_POS:   pushrod_out();  break;
-                case MID_POS:  pushrod_in();   break;
-                case DOWN_POS: pushrod_off();  break;
-            }
-            // SC 上/中：左摇杆上下控制总线舵机角度；SC 下：保持角度，左摇杆左右恢复旋转
-            BusServoAngleControl(RemoteControl::rcInfo.left_col,
-                                 RemoteControl::rcInfo.SC != DOWN_POS);
+        return;
+    }
 
-            // plate: SC up = out, SC mid = in, SC down = no action
-            PlateSetSwitch(RemoteControl::rcInfo.SC);
-        } else {
-            // 未知危险状态
-            ChassisStop();
-            UserStop();
-        }
-        // switch (RemoteControl::rcInfo.SB) {
-        // case UP_POS: //左侧一档
-        //     ChassisSetVelocity(ApplyDeadzone(RemoteControl::rcInfo.right_col) * CHASSIS_MAX_LINEAR,
-        //                        ApplyDeadzone(RemoteControl::rcInfo.right_rol) * CHASSIS_MAX_LINEAR,
-        //                        ApplyDeadzone(RemoteControl::rcInfo.left_rol) * CHASSIS_MAX_ROT_RPM);
-        //     break;
-        // case MID_POS: //左侧二档
-        //
-        //     break;
-        // case DOWN_POS: //左侧三档
-        //
-        //     break;
-        // default:
-        //     break;
-        // }
+    /* 同步带：SB = 前、SC = 后，任何 SA 档位都有效 */
+    /* SB 控后同步带、SC 控前同步带（已互换） */
+    BeltPair(RemoteControl::rcInfo.SB, ShovelLServo, ShovelRServo);
+    BeltPair(RemoteControl::rcInfo.SC, TurnLServo, TurnRServo);
+
+    if (RemoteControl::rcInfo.SA == DOWN_POS) {
+        /* 底盘模式：左摇杆左右旋转，右摇杆平移 */
+        ChassisSetVelocity(
+            ApplyDeadzone(RemoteControl::rcInfo.right_col, 0.02f) * CHASSIS_MAX_LINEAR,
+            ApplyDeadzone(RemoteControl::rcInfo.right_rol, 0.02f) * CHASSIS_MAX_LINEAR,
+            ApplyDeadzone(RemoteControl::rcInfo.left_rol, 0.02f) * CHASSIS_MAX_ROT_RPM);
+
+        /* 推杆停、总线保持角度；齿条仍按角度自动跟随 */
+        pushrod_off();
+        BusServoAngleControl(0.0f, false);
+        PlateControl(0.0f, g_busServoAngle);
+    } else if (RemoteControl::rcInfo.SA == UP_POS) {
+        /* 机构模式：底盘停 */
+        ChassisStop();
+
+        /* 左摇杆左右 -> 齿条（手动覆盖 + 自动跟随） */
+        PlateControl(ApplyDeadzone(RemoteControl::rcInfo.left_rol, 0.02f), g_busServoAngle);
+
+        /* 左摇杆上下 -> 推杆 */
+        PushrodByStick(RemoteControl::rcInfo.left_col);
+
+        /* 右摇杆上下 -> 总线舵机角度 */
+        BusServoAngleControl(RemoteControl::rcInfo.right_col, true);
+    } else {
+        // 未知危险状态
+        ChassisStop();
+        UserStop();
     }
 }
-

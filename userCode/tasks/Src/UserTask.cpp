@@ -130,10 +130,11 @@ bool IsBusServoSpecialSettingMode() {
     if (!RemoteControl::isOnline()) {
         return false;
     }
+    /* v2.0: SA up + SB up + SC down + SD down = special setting mode */
     return (RemoteControl::rcInfo.SA == UP_POS) &&
-           (RemoteControl::rcInfo.SD == DOWN_POS) &&
-           (RemoteControl::rcInfo.SB == MID_POS) &&
-           (RemoteControl::rcInfo.SC == MID_POS);
+           (RemoteControl::rcInfo.SB == UP_POS) &&
+           (RemoteControl::rcInfo.SC == DOWN_POS) &&
+           (RemoteControl::rcInfo.SD == DOWN_POS);
 }
 
 StickDirection GetStickDirection(float col, float rol, float threshold) {
@@ -388,10 +389,9 @@ BUS_SERVO_LINK_STATE_E BusServoLinkState() {
     return BUS_SERVO_LINK_ALL;
 }
 
-// ================= plate (rack) servo: open loop by time, NO homing =================
+// ================= plate (rack) servo: open loop by time, auto-follow bus angle =================
 static Servo *g_plateServo = nullptr;
 static uint32_t g_plateStopTick = 0;
-static int8_t g_plateSw = -1;
 
 enum PlateState {
     PLATE_IDLE = 0,
@@ -403,6 +403,11 @@ static int32_t g_platePosMs = 0;
 static int32_t g_plateTargetMs = 0;
 static uint32_t g_plateMoveMs = 0;
 static int8_t g_plateMoveDir = 0;
+
+/* 自动跟随 / 手动覆盖 状态 */
+static bool g_plateManual = false;
+static float g_plateManualStartAngle = 0.0f;
+static int8_t g_plateAutoTarget = -1;      /* -1 未知, 0 收到底, 1 伸到底 */
 
 static void PlateDrive(float speed) {
     if (g_plateServo != nullptr) {
@@ -445,7 +450,6 @@ static void PlateGoto(int32_t targetMs) {
 }
 
 static void PlateStop() {
-    /* 若正在运动，把已走过的时间补进位置估计 */
     if ((g_plateState == PLATE_MOVING) && (g_plateStopTick != 0u)) {
         const uint32_t now = HAL_GetTick();
         if (now < g_plateStopTick) {
@@ -490,41 +494,90 @@ static void PlateHandle() {
 }
 
 /**
- * @brief SC 三档 -> 齿条动作
- *   SC 上 : 出去（走到高位）
- *   SC 中 : 收回来（走回低位）
- *   SC 下 : 不动作
- *   动作进行中切档：立即停止，本次不执行新动作
+ * @brief 齿条控制：默认随总线舵机角度自动伸缩，摇杆可手动覆盖
+ * @param manualStick 手动摇杆（左摇杆左右，右正左负）
+ * @param busAngle    当前总线舵机角度（度）
+ *
+ * 规则：
+ *   角度 > 80+2 度  -> 伸到底
+ *   角度 < 80-2 度  -> 收到底
+ *   手动推摇杆      -> 接管，自动暂停，松手后保持位置
+ *   手动后角度跨过 80 度 -> 自动重新接管
  */
-void PlateSetSwitch(SWITCH_STATE_E sw) {
-    int8_t code;
-    switch (sw) {
-        case UP_POS:   code = 0; break;
-        case MID_POS:  code = 1; break;
-        case DOWN_POS: code = 2; break;
-        default:       return;
+void PlateControl(float manualStick, float busAngle) {
+    static uint32_t lastTick = 0;
+    const uint32_t now = HAL_GetTick();
+    uint32_t dt = 0;
+    if (lastTick != 0u) {
+        dt = now - lastTick;
+    }
+    lastTick = now;
+    if (dt > 50u) {
+        dt = 50u;
     }
 
-    if (code == g_plateSw) {
+    const bool manualNow = (manualStick > PLATE_MANUAL_DEADZONE) ||
+                           (manualStick < -PLATE_MANUAL_DEADZONE);
+
+    if (manualNow) {
+        if (!g_plateManual) {
+            g_plateManual = true;
+            g_plateManualStartAngle = busAngle;
+            g_plateAutoTarget = -1;
+        }
+
+        /* 手动优先：取消自动动作，直接给速度 */
+        g_plateStopTick = 0u;
+        g_plateState = PLATE_IDLE;
+
+        const float dir = (manualStick > 0.0f) ? PLATE_MANUAL_DIR_SIGN : -PLATE_MANUAL_DIR_SIGN;
+        PlateDrive(dir * PLATE_MANUAL_SPEED);
+
+        /* 按时间估算位置：手动速度与正常速度不同，需要按比例换算 */
+        const float ratio = PLATE_MANUAL_SPEED / PLATE_SPEED;
+        const int32_t delta = (int32_t)((float)dt * ratio + 0.5f);
+        if (dir > 0.0f) {
+            g_platePosMs += delta;
+        } else {
+            g_platePosMs -= delta;
+        }
+        if (g_platePosMs > (int32_t)PLATE_POS_HIGH_MS) {
+            g_platePosMs = (int32_t)PLATE_POS_HIGH_MS;
+        }
+        if (g_platePosMs < 0) {
+            g_platePosMs = 0;
+        }
+        g_plateTargetMs = g_platePosMs;
         return;
     }
 
-    const int8_t prev = g_plateSw;
-    g_plateSw = code;
+    if (g_plateManual) {
+        /* 松手：停住并保持位置 */
+        PlateDrive(0.0f);
 
-    if (prev < 0) {
-        return;                       /* 上电第一次只记录 */
+        /* 角度跨过阈值 -> 恢复自动 */
+        const float before = g_plateManualStartAngle - PLATE_AUTO_THRESHOLD_DEG;
+        const float after  = busAngle - PLATE_AUTO_THRESHOLD_DEG;
+        if ((before > 0.0f) == (after > 0.0f)) {
+            return;         /* 还没跨过，保持手动锁存 */
+        }
+        g_plateManual = false;
+        g_plateAutoTarget = -1;
     }
 
-    if (g_plateState == PLATE_MOVING) {
-        PlateStop();                  /* 中途切档：先停 */
-        return;
+    /* 自动模式：带死区，防止在阈值附近抖动 */
+    int8_t want;
+    if (busAngle > (PLATE_AUTO_THRESHOLD_DEG + PLATE_AUTO_HYST_DEG)) {
+        want = 1;
+    } else if (busAngle < (PLATE_AUTO_THRESHOLD_DEG - PLATE_AUTO_HYST_DEG)) {
+        want = 0;
+    } else {
+        return;             /* 死区内保持当前位置 */
     }
 
-    if (code == 0) {
-        PlateGoto((int32_t)PLATE_POS_HIGH_MS);
-    } else if (code == 1) {
-        PlateGoto(0);
+    if (want != g_plateAutoTarget) {
+        g_plateAutoTarget = want;
+        PlateGoto(want ? (int32_t)PLATE_POS_HIGH_MS : 0);
     }
 }
 // ================= end plate =================
