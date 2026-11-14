@@ -71,8 +71,9 @@ void CtrlHandle(){
     }
 
     /* 同步带：SB = 前、SC = 后，任何 SA 档位都有效 */
-    BeltPair(RemoteControl::rcInfo.SB, TurnLServo, TurnRServo);
-    BeltPair(RemoteControl::rcInfo.SC, ShovelLServo, ShovelRServo);
+    /* SB 控后同步带、SC 控前同步带（已互换） */
+    BeltPair(RemoteControl::rcInfo.SB, ShovelLServo, ShovelRServo);
+    BeltPair(RemoteControl::rcInfo.SC, TurnLServo, TurnRServo);
 
     if (RemoteControl::rcInfo.SA == DOWN_POS) {
         /* 底盘模式：左摇杆左右旋转，右摇杆平移 */
