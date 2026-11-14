@@ -42,6 +42,18 @@ extern float g_busServoAngle;
 #define PLATE_DIR_RETRACT           (-1)
 #define PLATE_HOME_SPEED            90.0f
 #define PLATE_HOME_MS               (PLATE_MOVE_MS)
+/* ---------- plate auto-follow / manual override ---------- */
+/* 同步带速度（百分比），main 里已有同名宏时以 main 为准 */
+#ifndef SERVO_SPEED_PERC
+#define SERVO_SPEED_PERC  99
+#endif
+
+#define PLATE_AUTO_THRESHOLD_DEG    80.0f    /* 总线角度高于此值 -> 齿条伸出 */
+#define PLATE_AUTO_HYST_DEG          2.0f    /* 阈值死区，防止抖动 */
+#define PLATE_MANUAL_DEADZONE        0.4f    /* 手动摇杆死区 */
+#define PLATE_MANUAL_SPEED          60.0f    /* 手动速度（比自动慢，便于微调） */
+#define PLATE_MANUAL_DIR_SIGN       (+1.0f)  /* 摇杆向右 = 伸出；反了就改 -1 */
+#define PLATE_PUSHROD_THRESHOLD      0.5f    /* 推杆摇杆阈值 */
 #define PLATE_POS_LOW_MS            0u
 #define PLATE_POS_MID_MS            (PLATE_MOVE_MS / 2u)
 #define PLATE_POS_HIGH_MS           (PLATE_MOVE_MS)
@@ -59,7 +71,7 @@ void UserStop();
 void UserHandle();
 void UserInit();
 void BusServoSetAngle(float angle);
-void PlateSetSwitch(SWITCH_STATE_E sw);
+void PlateControl(float manualStick, float busAngle);
 void BusServoAngleControl(float stickUpDown, bool enable);
 bool BusServoCalibrationFeedbackColor(uint32_t *color);
 BUS_SERVO_LINK_STATE_E BusServoLinkState();
