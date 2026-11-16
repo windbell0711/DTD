@@ -44,8 +44,11 @@ extern float g_busServoAngle;
 #define PLATE_HOME_MS               (PLATE_MOVE_MS)
 /* ---------- plate auto-follow / manual override ---------- */
 /* 同步带速度（百分比），main 里已有同名宏时以 main 为准 */
-#ifndef SERVO_SPEED_PERC
-#define SERVO_SPEED_PERC  99
+#ifndef SERVO_FRONT_SPEED_PERC
+#define SERVO_FRONT_SPEED_PERC  90
+#endif
+#ifndef SERVO_REAR_SPEED_PERC
+#define SERVO_REAR_SPEED_PERC   90
 #endif
 
 #define PLATE_AUTO_THRESHOLD_DEG    80.0f    /* 总线角度高于此值 -> 齿条伸出 */
@@ -59,8 +62,6 @@ extern float g_busServoAngle;
 #define PLATE_POS_HIGH_MS           (PLATE_MOVE_MS)
 
 extern Servo ClawServo,TurnLServo,TurnRServo,ShovelLServo,ShovelRServo;
-
-#define SERVO_SPEED_PERC  99
 
 typedef enum {
     BUS_SERVO_LINK_NONE = 0,    // 总线舵机全部无回包

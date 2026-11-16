@@ -4,7 +4,7 @@
 #include "ChassisTask.h"
 #include "ChassisKinematics.hpp"
 
-#define SPEED_SCALE_ARG (0.5f)
+#define SPEED_SCALE_ARG (0.55f)
 
 PID_Regulator_t pidRegulator = {//此为储存pid参数的结构体，四个底盘电机共用
         .kp = 120,

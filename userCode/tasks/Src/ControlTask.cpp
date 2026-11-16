@@ -17,19 +17,19 @@ static float ApplyDeadzone(float value, float deadzone) {
 /**
  * @brief 同步带一对舵机：上档往外、中档停、下档往里（镜像安装）
  */
-static void BeltPair(SWITCH_STATE_E sw, Servo &left, Servo &right) {
+static void BeltPair(SWITCH_STATE_E sw, Servo &left, Servo &right, float speed) {
     switch (sw) {
         case UP_POS:
-            left.SetTargetSpeed((float)SERVO_SPEED_PERC);
-            right.SetTargetSpeed(-(float)SERVO_SPEED_PERC);
+            left.SetTargetSpeed(speed);
+            right.SetTargetSpeed(-speed);
             break;
         case MID_POS:
             left.SetTargetSpeed(0.0f);
             right.SetTargetSpeed(0.0f);
             break;
         case DOWN_POS:
-            left.SetTargetSpeed(-(float)SERVO_SPEED_PERC);
-            right.SetTargetSpeed((float)SERVO_SPEED_PERC);
+            left.SetTargetSpeed(-speed);
+            right.SetTargetSpeed(speed);
             break;
         default:
             break;
@@ -70,10 +70,12 @@ void CtrlHandle(){
         return;
     }
 
-    /* 同步带：SB = 前、SC = 后，任何 SA 档位都有效 */
-    /* SB 控后同步带、SC 控前同步带（已互换） */
-    BeltPair(RemoteControl::rcInfo.SB, ShovelLServo, ShovelRServo);
-    BeltPair(RemoteControl::rcInfo.SC, TurnLServo, TurnRServo);
+    /* 同步带：SB = 后、SC = 前，任何 SA 档位都有效 */
+    /* 后同步带 = Turn 对；前同步带 = Shovel 对 */
+    BeltPair(RemoteControl::rcInfo.SC, TurnLServo, TurnRServo,
+             (float)SERVO_REAR_SPEED_PERC);
+    BeltPair(RemoteControl::rcInfo.SB, ShovelLServo, ShovelRServo,
+             (float)SERVO_FRONT_SPEED_PERC);
 
     if (RemoteControl::rcInfo.SA == DOWN_POS) {
         /* 底盘模式：左摇杆左右旋转，右摇杆平移 */
