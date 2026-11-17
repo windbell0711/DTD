@@ -4,29 +4,67 @@
 
 #include "PushRod.h"
 
+namespace {
 
-void pushrod_off() {
-    HAL_GPIO_WritePin(EXTRA_GPIO_PWM6_GPIO_Port, EXTRA_GPIO_PWM6_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(EXTRA_GPIO_PWM7_GPIO_Port, EXTRA_GPIO_PWM7_Pin, GPIO_PIN_RESET);
+void _set_rod_1(const bool extend) {
+    if (extend) {
+        HAL_GPIO_WritePin(RELAY_Port_1, RELAY_Pin_1, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(RELAY_Port_2, RELAY_Pin_2, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(RELAY_Port_2, RELAY_Pin_2, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(RELAY_Port_1, RELAY_Pin_1, GPIO_PIN_SET);
+    }
 }
 
-void pushrod_out() {
-    HAL_GPIO_WritePin(EXTRA_GPIO_PWM6_GPIO_Port, EXTRA_GPIO_PWM6_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(EXTRA_GPIO_PWM7_GPIO_Port, EXTRA_GPIO_PWM7_Pin, GPIO_PIN_SET);
+void _set_rod_2(const bool extend) {
+    if (extend) {
+        HAL_GPIO_WritePin(RELAY_Port_3, RELAY_Pin_3, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(RELAY_Port_4, RELAY_Pin_4, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(RELAY_Port_4, RELAY_Pin_4, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(RELAY_Port_3, RELAY_Pin_3, GPIO_PIN_SET);
+    }
 }
 
-void pushrod_in() {
-    HAL_GPIO_WritePin(EXTRA_GPIO_PWM6_GPIO_Port, EXTRA_GPIO_PWM6_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(EXTRA_GPIO_PWM7_GPIO_Port, EXTRA_GPIO_PWM7_Pin, GPIO_PIN_RESET);
+} // namespace
+
+void pushrod_1_off() {
+    HAL_GPIO_WritePin(RELAY_Port_1, RELAY_Pin_1, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(RELAY_Port_2, RELAY_Pin_2, GPIO_PIN_RESET);
 }
 
-void pushrod_toggle() {
-    if (!HAL_GPIO_ReadPin(EXTRA_GPIO_PWM6_GPIO_Port, EXTRA_GPIO_PWM6_Pin) &&
-        !HAL_GPIO_ReadPin(EXTRA_GPIO_PWM7_GPIO_Port, EXTRA_GPIO_PWM7_Pin)) {
-        // 如果处于关闭状态，则转到 out
-        pushrod_out();
-        }
-    // 否则反转方向
-    HAL_GPIO_TogglePin(EXTRA_GPIO_PWM6_GPIO_Port, EXTRA_GPIO_PWM6_Pin);
-    HAL_GPIO_TogglePin(EXTRA_GPIO_PWM7_GPIO_Port, EXTRA_GPIO_PWM7_Pin);
+void pushrod_2_off() {
+    HAL_GPIO_WritePin(RELAY_Port_3, RELAY_Pin_3, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(RELAY_Port_4, RELAY_Pin_4, GPIO_PIN_RESET);
+}
+
+void pushrod_1_out() {
+    _set_rod_1(true);
+}
+
+void pushrod_2_out() {
+    _set_rod_2(true);
+}
+
+void pushrod_1_in() {
+    _set_rod_1(false);
+}
+
+void pushrod_2_in() {
+    _set_rod_2(false);
+}
+
+void pushrod_all_off() {
+    pushrod_1_off();
+    pushrod_2_off();
+}
+
+void pushrod_all_out() {
+    pushrod_1_out();
+    pushrod_2_out();
+}
+
+void pushrod_all_in() {
+    pushrod_1_in();
+    pushrod_2_in();
 }

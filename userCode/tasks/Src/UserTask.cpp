@@ -645,7 +645,7 @@ Servo ShovelRServo(&ShovelR_Servo_Init);
 void UserStop(){
     UserMotor.Stop();
 
-    pushrod_off();
+    pushrod_all_off();
 
     if (g_busServo != nullptr) {
         const uint32_t now = HAL_GetTick();

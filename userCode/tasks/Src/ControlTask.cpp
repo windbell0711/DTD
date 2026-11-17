@@ -41,11 +41,11 @@ static void BeltPair(SWITCH_STATE_E sw, Servo &left, Servo &right, float speed) 
  */
 static void PushrodByStick(float upDown) {
     if (upDown > PLATE_PUSHROD_THRESHOLD) {
-        pushrod_out();
+        pushrod_all_out();
     } else if (upDown < -PLATE_PUSHROD_THRESHOLD) {
-        pushrod_in();
+        pushrod_all_in();
     } else {
-        pushrod_off();
+        pushrod_all_off();
     }
 }
 
@@ -85,7 +85,7 @@ void CtrlHandle(){
             ApplyDeadzone(RemoteControl::rcInfo.left_rol, 0.02f) * CHASSIS_MAX_ROT_RPM);
 
         /* 推杆停、总线保持角度；齿条仍按角度自动跟随 */
-        pushrod_off();
+        pushrod_all_off();
         BusServoAngleControl(0.0f, false);
         PlateControl(0.0f, g_busServoAngle);
     } else if (RemoteControl::rcInfo.SA == UP_POS) {
