@@ -75,6 +75,9 @@ void UserStop();
 void UserHandle();
 void UserInit();
 void BusServoSetAngle(float angle);
+
+/** 总线舵机故障状态 -> RGB 颜色（有故障时返回 true） */
+bool BusServoFaultColor(uint32_t *color);
 void PlateControl(float manualStick, float busAngle);
 void BusServoAngleControl(float stickUpDown, bool enable);
 bool BusServoCalibrationFeedbackColor(uint32_t *color);

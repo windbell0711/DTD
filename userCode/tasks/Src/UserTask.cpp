@@ -29,6 +29,10 @@ volatile uint32_t g_dbgHoldMs = 0;
 
 static BusServo *g_busServo = nullptr;
 static bool g_busServoTorqueEnabled = false;
+/* ---------- 总线舵机故障状态（0x41），用于板载 RGB 指示 ---------- */
+volatile uint8_t g_busServoStatus[2] = {0u, 0u};
+static uint32_t g_busServoStatusTick = 0;
+static uint8_t g_busServoStatusIndex = 0;
 /* ---------- 总线舵机状态调试（上电读一次，Watch 里看） ---------- */
 volatile uint8_t g_dbgBusSt1 = 0, g_dbgBusSt2 = 0;      /* 0x41 状态/错误标志 */
 volatile uint8_t g_dbgBusTmp1 = 0, g_dbgBusTmp2 = 0;    /* 0x3F 温度 */
@@ -170,6 +174,66 @@ static void BusServoDumpStatus() {
             if (i == 0u) { g_dbgBusLoad1 = load; } else { g_dbgBusLoad2 = load; }
         }
     }
+}
+/**
+ * @brief 轮流读取两颗舵机的 0x41 故障状态（每 300 ms 一次）
+ */
+static void BusServoPollStatus() {
+    if (g_busServo == nullptr) {
+        return;
+    }
+    const uint32_t now = HAL_GetTick();
+    if ((now - g_busServoStatusTick) < 300u) {
+        return;
+    }
+    g_busServoStatusTick = now;
+
+    uint8_t d[1] = {0u};
+    const uint8_t id = kBusServoIds[g_busServoStatusIndex];
+    if (g_busServo->readRegs(id, 0x41u, 1u, d)) {
+        g_busServoStatus[g_busServoStatusIndex] = d[0];
+    } else {
+        g_busServoStatus[g_busServoStatusIndex] = 0u;
+    }
+    g_busServoStatusIndex = (uint8_t)(g_busServoStatusIndex ^ 1u);
+}
+
+/**
+ * @brief 故障状态 -> 板载 RGB 颜色（闪动次数与舵机自身 LED 一致）
+ * @note  bit0 电压(闪1) / bit1 磁编码(闪2) / bit5 负载(闪3) / bit2 温度(闪4) / bit3 电流(闪5)
+ */
+bool BusServoFaultColor(uint32_t *color) {
+    if (color == nullptr) {
+        return false;
+    }
+
+    const uint8_t status = (uint8_t)(g_busServoStatus[0] | g_busServoStatus[1]);
+    if (status == 0u) {
+        return false;
+    }
+
+    uint32_t rgb = 0u;
+    uint8_t flashes = 1u;
+
+    if ((status & 0x01u) != 0u) {          /* 电压 */
+        rgb = 0xFF8000FFu; flashes = 1u;
+    } else if ((status & 0x02u) != 0u) {   /* 磁编码 */
+        rgb = 0xFF0000FFu; flashes = 2u;
+    } else if ((status & 0x20u) != 0u) {   /* 负载 */
+        rgb = 0xFFFFFF00u; flashes = 3u;
+    } else if ((status & 0x04u) != 0u) {   /* 温度 */
+        rgb = 0xFFFF0000u; flashes = 4u;
+    } else {                               /* 电流 */
+        rgb = 0xFFFF8000u; flashes = 5u;
+    }
+
+    const uint32_t periodMs = 1000u;
+    const uint32_t slot = periodMs / flashes;
+    const uint32_t phase = HAL_GetTick() % periodMs;
+    const uint32_t idx = phase / slot;
+    const uint32_t onTime = (slot >= 60u) ? 60u : (slot / 2u);
+    *color = ((phase - idx * slot) < onTime) ? rgb : 0u;
+    return true;
 }
 bool IsBusServoSpecialSettingMode() {
     if (!RemoteControl::isOnline()) {
@@ -845,6 +909,7 @@ void UserHandle(){
     ShovelRServo.Handle();
 
     BusServoCalibrationFeedbackHandle();
+    BusServoPollStatus();
     BusServoCalibrationHandle();
     UpdateBusServoWatch();
 

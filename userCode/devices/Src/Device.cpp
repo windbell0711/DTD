@@ -207,8 +207,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     if(htim == &htim10){
         // 1ms loop
         uint32_t feedbackColor = 0;
+        uint32_t faultColor = 0;
         if (BusServoCalibrationFeedbackColor(&feedbackColor)) {
             aRGB_led_show(feedbackColor);     // 特殊设置结果：蓝灯/红灯闪烁
+        } else if (BusServoFaultColor(&faultColor)) {
+            aRGB_led_show(faultColor);        // 总线舵机故障：颜色+闪次表示 0x41 状态
         } else {
             switch (BusServoLinkState()) {
                 case BUS_SERVO_LINK_NONE:
