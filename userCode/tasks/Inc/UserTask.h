@@ -26,6 +26,9 @@
  */
 #define BUS_SERVO_ID_1              1
 #define BUS_SERVO_ID_2              2
+/* 方向取反：指令角度变大时舵机转向相反（1 = 取反） */
+#define BUS_SERVO_DIR_INVERT        1
+
 #define BUS_SERVO_MIRROR_SECOND     1
 #define BUS_SERVO_ANGLE_MIN         57.2f
 #define BUS_SERVO_ANGLE_MAX         180.0f

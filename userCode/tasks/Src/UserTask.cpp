@@ -181,6 +181,9 @@ int16_t BusServoBasePos(uint8_t index, float angleDeg) {
     const float rawf = angleDeg * kBusServoRawPerDegree;
     int32_t raw = (int32_t)(rawf + ((rawf >= 0.0f) ? 0.5f : -0.5f));
     raw = WrapBusServoRaw(raw);
+#if BUS_SERVO_DIR_INVERT
+    raw = 4095 - raw;
+#endif
 #if BUS_SERVO_MIRROR_SECOND
     if (index == 1u) {
         raw = 4095 - raw;
