@@ -27,10 +27,10 @@
 #define BUS_SERVO_ID_1              1
 #define BUS_SERVO_ID_2              2
 #define BUS_SERVO_MIRROR_SECOND     1
-#define BUS_SERVO_ANGLE_MIN         30.0f
-#define BUS_SERVO_ANGLE_MAX         150.0f
+#define BUS_SERVO_ANGLE_MIN         10.0f
+#define BUS_SERVO_ANGLE_MAX         140.0f
 #define BUS_SERVO_ANGLE_INIT        90.0f    // 上电/首次进入控制时的目标角度
-#define BUS_SERVO_ANGLE_RATE_MAX    60.0f    // 度/秒，满杆时的角度变化率
+#define BUS_SERVO_ANGLE_RATE_MAX    50.0f    // 度/秒，满杆时的角度变化率
 
 extern float g_busServoAngle;
 
@@ -75,11 +75,9 @@ void UserStop();
 void UserHandle();
 void UserInit();
 void BusServoSetAngle(float angle);
-
-/** 总线舵机故障状态 -> RGB 颜色（有故障时返回 true） */
-bool BusServoFaultColor(uint32_t *color);
 void PlateControl(float manualStick, float busAngle);
 void BusServoAngleControl(float stickUpDown, bool enable);
 bool BusServoCalibrationFeedbackColor(uint32_t *color);
+bool BusServoFaultColor(uint32_t *color);
 BUS_SERVO_LINK_STATE_E BusServoLinkState();
 #endif //RM_FRAME_C_USERTASK_H
