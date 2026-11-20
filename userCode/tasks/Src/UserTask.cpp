@@ -39,6 +39,7 @@ volatile uint8_t g_dbgBusTmp1 = 0, g_dbgBusTmp2 = 0;    /* 0x3F 温度 */
 volatile uint8_t g_dbgBusVolt1 = 0, g_dbgBusVolt2 = 0;  /* 0x3E 电压(0.1V) */
 volatile int16_t g_dbgBusLoad1 = 0, g_dbgBusLoad2 = 0;  /* 0x3C 负载 */
 volatile uint8_t g_dbgBusOk1 = 0, g_dbgBusOk2 = 0;      /* 读取是否成功 */
+static bool g_busServoAngleLimitDisabled = false;
 static uint32_t g_busServoLastTorqueOffTick = 0;
 float g_busServoAngle = BUS_SERVO_ANGLE_INIT;
 
@@ -255,6 +256,15 @@ bool BusServoWriteTorque(bool enable) {
         return false;
     }
     return g_busServo->syncWriteTorque(kBusServoIds, enable, kBusServoCount);
+}
+
+static void BusServoDisableTorque() {
+    if (g_busServo == nullptr) {
+        return;
+    }
+    (void)BusServoWriteTorque(false);
+    g_busServoTorqueEnabled = false;
+    g_busServoLastTorqueOffTick = HAL_GetTick();
 }
 
 void LoadBusServoCalibration() {
@@ -781,9 +791,7 @@ void UserStop(){
         const uint32_t now = HAL_GetTick();
         if (g_busServoTorqueEnabled ||
             ((now - g_busServoLastTorqueOffTick) >= kBusServoTorqueOffRetryMs)) {
-            BusServoWriteTorque(false);
-            g_busServoTorqueEnabled = false;
-            g_busServoLastTorqueOffTick = now;
+            BusServoDisableTorque();
         }
     }
     TurnLServo.stop();
@@ -878,22 +886,51 @@ void BusServoAngleControl(float stickUpDown, bool enable) {
         dt = kBusServoAngleDtMax;
     }
 
+    /* SD 下档保持失能；即使控制路径误调用，也不能重新使能总线舵机 */
+    if (RemoteControl::rcInfo.SD != UP_POS) {
+        if (g_busServoTorqueEnabled ||
+            ((now - g_busServoLastTorqueOffTick) >= kBusServoTorqueOffRetryMs)) {
+            BusServoDisableTorque();
+        }
+        return;
+    }
+
+    float stick = 0.0f;
     if (enable) {
-        float stick = stickUpDown;
+        stick = stickUpDown;
         if ((stick > -kBusServoAngleStickDeadzone) &&
             (stick < kBusServoAngleStickDeadzone)) {
             stick = 0.0f;
         }
 
-        g_busServoAngle += stick * BUS_SERVO_ANGLE_RATE_MAX * dt;
-        if (g_busServoAngle < BUS_SERVO_ANGLE_MIN) {
+        if ((g_busServoAngle <= BUS_SERVO_ANGLE_MIN) && (stick < 0.0f)) {
+            /* 到最低位后继续向下：失能并锁定，直到再次向上 */
             g_busServoAngle = BUS_SERVO_ANGLE_MIN;
-        } else if (g_busServoAngle > BUS_SERVO_ANGLE_MAX) {
-            g_busServoAngle = BUS_SERVO_ANGLE_MAX;
+            if (!g_busServoAngleLimitDisabled) {
+                g_busServoAngleLimitDisabled = true;
+                BusServoDisableTorque();
+            }
+        } else {
+            if (g_busServoAngleLimitDisabled && (stick > 0.0f)) {
+                g_busServoAngleLimitDisabled = false;
+            }
+            if (!g_busServoAngleLimitDisabled) {
+                g_busServoAngle += stick * BUS_SERVO_ANGLE_RATE_MAX * dt;
+                if (g_busServoAngle < BUS_SERVO_ANGLE_MIN) {
+                    g_busServoAngle = BUS_SERVO_ANGLE_MIN;
+                } else if (g_busServoAngle > BUS_SERVO_ANGLE_MAX) {
+                    g_busServoAngle = BUS_SERVO_ANGLE_MAX;
+                }
+            }
         }
     }
 
-    if ((now - lastCommandTick) >= kBusServoCommandRefreshMs) {
+    if (g_busServoAngleLimitDisabled) {
+        /* 定期重发失能，防止总线丢帧后舵机仍在使能状态 */
+        if ((now - g_busServoLastTorqueOffTick) >= kBusServoTorqueOffRetryMs) {
+            BusServoDisableTorque();
+        }
+    } else if ((now - lastCommandTick) >= kBusServoCommandRefreshMs) {
         BusServoSetAngle(g_busServoAngle);
         lastCommandTick = now;
     }
