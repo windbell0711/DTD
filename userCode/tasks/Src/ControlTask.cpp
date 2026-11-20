@@ -70,9 +70,8 @@ void CtrlHandle(){
         return;
     }
 
-    /* 同步带：SB = 后、SC = 前，任何 SA 档位都有效 */
-    /* 后同步带 = Turn 对；前同步带 = Shovel 对 */
-    BeltPair(RemoteControl::rcInfo.SC, TurnLServo, TurnRServo,
+    /* 同步带：SB 一个拨杆同时控制四颗舵机（上=外、中=停、下=里） */
+    BeltPair(RemoteControl::rcInfo.SB, TurnLServo, TurnRServo,
              (float)SERVO_REAR_SPEED_PERC);
     BeltPair(RemoteControl::rcInfo.SB, ShovelLServo, ShovelRServo,
              (float)SERVO_FRONT_SPEED_PERC);
