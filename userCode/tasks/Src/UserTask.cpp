@@ -29,6 +29,12 @@ volatile uint32_t g_dbgHoldMs = 0;
 
 static BusServo *g_busServo = nullptr;
 static bool g_busServoTorqueEnabled = false;
+/* ---------- 总线舵机状态调试（上电读一次，Watch 里看） ---------- */
+volatile uint8_t g_dbgBusSt1 = 0, g_dbgBusSt2 = 0;      /* 0x41 状态/错误标志 */
+volatile uint8_t g_dbgBusTmp1 = 0, g_dbgBusTmp2 = 0;    /* 0x3F 温度 */
+volatile uint8_t g_dbgBusVolt1 = 0, g_dbgBusVolt2 = 0;  /* 0x3E 电压(0.1V) */
+volatile int16_t g_dbgBusLoad1 = 0, g_dbgBusLoad2 = 0;  /* 0x3C 负载 */
+volatile uint8_t g_dbgBusOk1 = 0, g_dbgBusOk2 = 0;      /* 读取是否成功 */
 static uint32_t g_busServoLastTorqueOffTick = 0;
 float g_busServoAngle = BUS_SERVO_ANGLE_INIT;
 
@@ -126,6 +132,45 @@ void BusServoCalibrationFeedbackHandle() {
     }
 }
 
+/**
+ * @brief 读两颗总线舵机的状态/温度/电压/负载（上电调用一次）
+ * @note  0x41=状态, 0x3F=温度, 0x3E=电压(0.1V), 0x3C=负载
+ */
+static void BusServoDumpStatus() {
+    if (g_busServo == nullptr) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        uint8_t d[2] = {0u, 0u};
+        const uint8_t id = kBusServoIds[i];
+        const bool ok = g_busServo->readRegs(id, 0x41u, 1u, d);
+
+        if (i == 0u) {
+            g_dbgBusOk1 = ok ? 1u : 0u;
+            g_dbgBusSt1 = ok ? d[0] : 0u;
+        } else {
+            g_dbgBusOk2 = ok ? 1u : 0u;
+            g_dbgBusSt2 = ok ? d[0] : 0u;
+        }
+
+        uint8_t t = 0u;
+        if (g_busServo->readRegs(id, 0x3Fu, 1u, &t)) {
+            if (i == 0u) { g_dbgBusTmp1 = t; } else { g_dbgBusTmp2 = t; }
+        }
+
+        uint8_t v = 0u;
+        if (g_busServo->readRegs(id, 0x3Eu, 1u, &v)) {
+            if (i == 0u) { g_dbgBusVolt1 = v; } else { g_dbgBusVolt2 = v; }
+        }
+
+        uint8_t ld[2] = {0u, 0u};
+        if (g_busServo->readRegs(id, 0x3Cu, 2u, ld)) {
+            const int16_t load = (int16_t)((uint16_t)ld[0] | ((uint16_t)ld[1] << 8));
+            if (i == 0u) { g_dbgBusLoad1 = load; } else { g_dbgBusLoad2 = load; }
+        }
+    }
+}
 bool IsBusServoSpecialSettingMode() {
     if (!RemoteControl::isOnline()) {
         return false;
@@ -713,6 +758,8 @@ void UserInit(){
     servo.setBaud(BUS_SERVO_BAUD);
     LoadBusServoCalibration();
     g_busServoLastTorqueOffTick = HAL_GetTick() - kBusServoTorqueOffRetryMs;
+
+    BusServoDumpStatus();   /* 上电读一次状态，Watch 里看 */
     g_busServoLastPingTick = HAL_GetTick() - kBusServoPingIntervalMs;
 }
 

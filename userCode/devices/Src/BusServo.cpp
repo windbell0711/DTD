@@ -260,6 +260,32 @@ bool BusServo::writePos(uint8_t id, int16_t pos, uint16_t speed, uint8_t acc) {
     return recvAck(id, params, n, sizeof(params), &err) && !err;
 }
 
+bool BusServo::readRegs(uint8_t id, uint8_t addr, uint8_t cnt, uint8_t *out,
+                        bool *servoError) {
+    if ((out == nullptr) || (cnt == 0u) || (cnt > 8u)) {
+        return false;
+    }
+
+    const uint8_t p[2] = {addr, cnt};
+    uint8_t params[10];
+    uint8_t n = 0;
+    bool err = false;
+
+    if (!sendFrame(id, kInstrRead, p, sizeof(p))) {
+        return false;
+    }
+    if (!recvAck(id, params, n, sizeof(params), &err) || (n < cnt)) {
+        return false;
+    }
+
+    for (uint8_t i = 0; i < cnt; ++i) {
+        out[i] = params[i];
+    }
+    if (servoError != nullptr) {
+        *servoError = err;
+    }
+    return true;
+}
 bool BusServo::readPos(uint8_t id, int16_t &pos) {
     const uint8_t p[2] = {kAddrPos, 2};
 

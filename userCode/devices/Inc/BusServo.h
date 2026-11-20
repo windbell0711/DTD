@@ -61,6 +61,10 @@ public:
     /** 读当前位置（0~4095） */
     bool readPos(uint8_t id, int16_t &pos);
 
+    /** 读取任意寄存器（cnt 字节，低字节在前）；同时取回应答里的 ERR/状态 */
+    bool readRegs(uint8_t id, uint8_t addr, uint8_t cnt, uint8_t *out,
+                  bool *servoError = nullptr);
+
     /** 扭矩开关：false = Release（可手掰），true = 锁住 */
     bool setTorque(uint8_t id, bool enable);
 
