@@ -27,8 +27,8 @@
 #define BUS_SERVO_ID_1              1
 #define BUS_SERVO_ID_2              2
 #define BUS_SERVO_MIRROR_SECOND     1
-#define BUS_SERVO_ANGLE_MIN         50.0f
-#define BUS_SERVO_ANGLE_MAX         180.0f
+#define BUS_SERVO_ANGLE_MIN         30.0f
+#define BUS_SERVO_ANGLE_MAX         150.0f
 #define BUS_SERVO_ANGLE_INIT        90.0f    // 上电/首次进入控制时的目标角度
 #define BUS_SERVO_ANGLE_RATE_MAX    60.0f    // 度/秒，满杆时的角度变化率
 

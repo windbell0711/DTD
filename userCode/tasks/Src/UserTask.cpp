@@ -63,7 +63,7 @@ constexpr float kBusServoBeepVolume = 1.0f;
 enum BusServoCalibAction : uint8_t {
     BUS_CALIB_NONE = 0,
     BUS_CALIB_180,
-    BUS_CALIB_90
+    BUS_CALIB_0
 };
 
 enum StickDirection : uint8_t {
@@ -87,7 +87,7 @@ struct BusServoSettingGesture {
 // 新增特殊设置方向时，在这里加一行即可
 const BusServoSettingGesture kBusServoSettingGestures[] = {
     {STICK_UP_LEFT,    STICK_UP_RIGHT,    BUS_CALIB_180},
-    {STICK_DOWN_LEFT,  STICK_DOWN_RIGHT,  BUS_CALIB_90},
+    {STICK_DOWN_LEFT,  STICK_DOWN_RIGHT,  BUS_CALIB_0},
 };
 
 uint32_t g_busServoLastAckTick[kBusServoCount] = {0, 0};
@@ -223,7 +223,7 @@ bool ApplyBusServoCalibration(BusServoCalibAction action) {
         }
     }
 
-    const float referenceDeg = (action == BUS_CALIB_90) ? 90.0f : 180.0f;
+    const float referenceDeg = (action == BUS_CALIB_0) ? 0.0f : 180.0f;
     int16_t offsets[kBusServoCount];
     for (uint8_t i = 0; i < kBusServoCount; ++i) {
         int32_t offset = (int32_t)current[i] - BusServoBasePos(i, referenceDeg);
