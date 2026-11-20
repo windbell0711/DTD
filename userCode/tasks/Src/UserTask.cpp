@@ -162,6 +162,21 @@ int16_t WrapBusServoRaw(int32_t raw) {
     return (int16_t)raw;
 }
 
+/**
+ * @brief 位置限幅：越界就停在端点，绝不回绕
+ * @note  之前用 WrapBusServoRaw 做最终位置，校正量把结果拉成负数时会绕到 4095，
+ *        表现就是"一直按住摇杆，舵机突然冲到另一端"，这里改成钳位。
+ */
+int16_t ClampBusServoRaw(int32_t raw) {
+    if (raw < 0) {
+        return 0;
+    }
+    if (raw > 4095) {
+        return 4095;
+    }
+    return (int16_t)raw;
+}
+
 int16_t BusServoBasePos(uint8_t index, float angleDeg) {
     const float rawf = angleDeg * kBusServoRawPerDegree;
     int32_t raw = (int32_t)(rawf + ((rawf >= 0.0f) ? 0.5f : -0.5f));
@@ -175,7 +190,7 @@ int16_t BusServoBasePos(uint8_t index, float angleDeg) {
 }
 
 int16_t BusServoCorrectedPos(uint8_t index, int16_t basePos) {
-    return WrapBusServoRaw((int32_t)basePos + g_busServoCalibOffset[index]);
+    return ClampBusServoRaw((int32_t)basePos + g_busServoCalibOffset[index]);
 }
 
 bool BusServoWriteTorque(bool enable) {
@@ -238,6 +253,15 @@ bool ApplyBusServoCalibration(BusServoCalibAction action) {
     }
 
     for (uint8_t i = 0; i < kBusServoCount; ++i) {
+
+    /* 校验：校正后在角度上下限内都不能越界，否则拒绝本次校准（防止位置回绕导致舵机冲向另一端） */
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        const int32_t lo = (int32_t)BusServoBasePos(i, BUS_SERVO_ANGLE_MIN) + offsets[i];
+        const int32_t hi = (int32_t)BusServoBasePos(i, BUS_SERVO_ANGLE_MAX) + offsets[i];
+        if ((lo < 0) || (lo > 4095) || (hi < 0) || (hi > 4095)) {
+            return false;
+        }
+    }
         g_busServoCalibOffset[i] = offsets[i];
     }
     SaveBusServoCalibration(offsets, referenceDeg);
