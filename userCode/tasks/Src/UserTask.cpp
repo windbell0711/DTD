@@ -39,6 +39,7 @@ volatile uint8_t g_dbgBusTmp1 = 0, g_dbgBusTmp2 = 0;    /* 0x3F 温度 */
 volatile uint8_t g_dbgBusVolt1 = 0, g_dbgBusVolt2 = 0;  /* 0x3E 电压(0.1V) */
 volatile int16_t g_dbgBusLoad1 = 0, g_dbgBusLoad2 = 0;  /* 0x3C 负载 */
 volatile uint8_t g_dbgBusOk1 = 0, g_dbgBusOk2 = 0;      /* 读取是否成功 */
+volatile uint8_t g_dbgOverloadOk1 = 0, g_dbgOverloadOk2 = 0;  /* 0x24 写入是否成功 */
 static uint32_t g_busServoLastTorqueOffTick = 0;
 float g_busServoAngle = BUS_SERVO_ANGLE_INIT;
 
@@ -198,6 +199,21 @@ static void BusServoPollStatus() {
     g_busServoStatusIndex = (uint8_t)(g_busServoStatusIndex ^ 1u);
 }
 
+#if BUS_SERVO_APPLY_OVERLOAD_TORQUE
+/**
+ * @brief 把两颗舵机的过载扭矩(0x24)写成 BUS_SERVO_OVERLOAD_TORQUE_VALUE
+ * @note  只在上电时执行一次；写 EPROM 有寿命，验证完请把宏关掉
+ */
+static void BusServoApplyOverloadTorque() {
+    if (g_busServo == nullptr) {
+        return;
+    }
+    g_dbgOverloadOk1 = g_busServo->writeEepromReg(kBusServoIds[0], 0x24u,
+                                                  BUS_SERVO_OVERLOAD_TORQUE_VALUE) ? 1u : 0u;
+    g_dbgOverloadOk2 = g_busServo->writeEepromReg(kBusServoIds[1], 0x24u,
+                                                  BUS_SERVO_OVERLOAD_TORQUE_VALUE) ? 1u : 0u;
+}
+#endif
 bool IsBusServoSpecialSettingMode() {
     if (!RemoteControl::isOnline()) {
         return false;
@@ -826,6 +842,9 @@ void UserInit(){
     g_busServoLastTorqueOffTick = HAL_GetTick() - kBusServoTorqueOffRetryMs;
 
     BusServoDumpStatus();   /* 上电读一次状态，Watch 里看 */
+#if BUS_SERVO_APPLY_OVERLOAD_TORQUE
+    BusServoApplyOverloadTorque();   /* 写 EPROM：过载扭矩 = 100% */
+#endif
     g_busServoLastPingTick = HAL_GetTick() - kBusServoPingIntervalMs;
 }
 

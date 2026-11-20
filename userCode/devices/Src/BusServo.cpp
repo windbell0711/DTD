@@ -331,6 +331,18 @@ bool BusServo::writeReg(uint8_t id, uint8_t addr, uint8_t value) {
     return recvAck(id, params, n, sizeof(params), &err) && !err;
 }
 
+bool BusServo::writeEepromReg(uint8_t id, uint8_t addr, uint8_t value) {
+    constexpr uint8_t kAddrLock = 0x37u;   /* EPROM 写保护：0=解锁, 1=上锁 */
+
+    (void)setTorque(id, false);            /* EPROM 写入前必须关扭矩 */
+    if (!writeReg(id, kAddrLock, 0u)) {
+        return false;
+    }
+
+    const bool ok = writeReg(id, addr, value);
+    (void)writeReg(id, kAddrLock, 1u);
+    return ok;
+}
 bool BusServo::setID(uint8_t oldId, uint8_t newId) {
     // 解锁 EPROM（0x37 写 0），否则改完掉电会丢
     if (!writeReg(oldId, 0x37, 0)) {

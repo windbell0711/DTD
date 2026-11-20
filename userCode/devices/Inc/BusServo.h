@@ -69,6 +69,12 @@ public:
     bool setTorque(uint8_t id, bool enable);
 
     /**
+     * @brief 写 EPROM 参数（自动：关扭矩 -> 解锁 -> 写 -> 上锁）
+     * @note  EPROM 写入次数有限（约 10 万次），不要频繁调用
+     */
+    bool writeEepromReg(uint8_t id, uint8_t addr, uint8_t value);
+
+    /**
      * @brief 改舵机 ID（写 EPROM，掉电保存）
      * @note  总线上只能接「一个」舵机时操作；改完后续通信要用新 ID
      */
