@@ -221,6 +221,34 @@ static bool BusServoWriteOverloadTorque(uint8_t percent) {
     return ok;
 }
 
+/**
+ * @brief 上电保证过载扭矩(0x24)为 80%
+ * @note  先读再比，只有不是 80 才写，避免每次上电都刷 EPROM
+ */
+static void BusServoEnsureOverloadDefault(void) {
+    if (g_busServo == nullptr) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        uint8_t cur = 0u;
+        bool ok = false;
+
+        if (g_busServo->readRegs(kBusServoIds[i], 0x24u, 1u, &cur)) {
+            ok = true;
+            if (cur != BUS_SERVO_OVERLOAD_TORQUE_DEFAULT) {
+                ok = g_busServo->writeEepromReg(kBusServoIds[i], 0x24u,
+                                                BUS_SERVO_OVERLOAD_TORQUE_DEFAULT);
+            }
+        }
+
+        if (i == 0u) {
+            g_dbgOverloadOk1 = ok ? 1u : 0u;
+        } else {
+            g_dbgOverloadOk2 = ok ? 1u : 0u;
+        }
+    }
+}
 bool IsBusServoSpecialSettingMode() {
     if (!RemoteControl::isOnline()) {
         return false;
@@ -856,6 +884,7 @@ void UserInit(){
     g_busServoLastTorqueOffTick = HAL_GetTick() - kBusServoTorqueOffRetryMs;
 
     BusServoDumpStatus();   /* 上电读一次状态，Watch 里看 */
+    BusServoEnsureOverloadDefault();   /* 过载扭矩保证为 80%，已是则不写 */
     g_busServoLastPingTick = HAL_GetTick() - kBusServoPingIntervalMs;
 }
 
