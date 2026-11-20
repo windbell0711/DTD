@@ -81,7 +81,7 @@ protected:
 extern flash_data_t flashData;
 
 /*外部函数声明-------------------------------------------------------------*/
-void bsp_flash_write(flash_data_t *_flashData);
+bool bsp_flash_write(flash_data_t *_flashData);
 void bsp_flash_read(flash_data_t *_flashData);
 float bsp_BuzzerOn(float _freq, float _targetVolPct);
 void bsp_BuzzerOff();

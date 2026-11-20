@@ -201,14 +201,31 @@ void LoadBusServoCalibration() {
     }
 }
 
-void SaveBusServoCalibration(const int16_t *offsets, float referenceDeg) {
+bool SaveBusServoCalibration(const int16_t *offsets, float referenceDeg) {
+    const int16_t prevOffsets[kBusServoCount] = {
+        flashData.busServoCalibOffset[0], flashData.busServoCalibOffset[1]
+    };
+    const int16_t prevReferenceDeg = flashData.busServoCalibReferenceDeg;
+    const uint16_t prevReserved = flashData.busServoCalibReserved;
+    const uint32_t prevMagic = flashData.busServoCalibMagic;
+
     for (uint8_t i = 0; i < kBusServoCount; ++i) {
         flashData.busServoCalibOffset[i] = offsets[i];
     }
     flashData.busServoCalibReferenceDeg = (int16_t)referenceDeg;
     flashData.busServoCalibReserved = 0;
     flashData.busServoCalibMagic = BUS_SERVO_CALIB_MAGIC;
-    bsp_flash_write(&flashData);
+
+    if (!bsp_flash_write(&flashData)) {
+        for (uint8_t i = 0; i < kBusServoCount; ++i) {
+            flashData.busServoCalibOffset[i] = prevOffsets[i];
+        }
+        flashData.busServoCalibReferenceDeg = prevReferenceDeg;
+        flashData.busServoCalibReserved = prevReserved;
+        flashData.busServoCalibMagic = prevMagic;
+        return false;
+    }
+    return true;
 }
 
 bool ApplyBusServoCalibration(BusServoCalibAction action) {
@@ -237,10 +254,12 @@ bool ApplyBusServoCalibration(BusServoCalibAction action) {
         offsets[i] = (int16_t)offset;
     }
 
+    if (!SaveBusServoCalibration(offsets, referenceDeg)) {
+        return false;
+    }
     for (uint8_t i = 0; i < kBusServoCount; ++i) {
         g_busServoCalibOffset[i] = offsets[i];
     }
-    SaveBusServoCalibration(offsets, referenceDeg);
     return true;
 }
 

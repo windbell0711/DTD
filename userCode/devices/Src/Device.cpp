@@ -155,23 +155,41 @@ void bsp_ADC_vccMoni(){
 
 #define FLASH_SECTOR_9_ADDRESS 0x080A0000
 flash_data_t flashData;
-void bsp_flash_write(flash_data_t *_flashData){
-    HAL_FLASH_Unlock();
+bool bsp_flash_write(flash_data_t *_flashData){
+    if (_flashData == nullptr) {
+        return false;
+    }
+    if (HAL_FLASH_Unlock() != HAL_OK) {
+        return false;
+    }
+    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
+                           FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR);
+
     FLASH_EraseInitTypeDef eraseInit = {0};
     eraseInit.TypeErase = FLASH_TYPEERASE_SECTORS;
     eraseInit.Sector = FLASH_SECTOR_9;
     eraseInit.NbSectors = 1;
     eraseInit.VoltageRange = FLASH_VOLTAGE_RANGE_3;
-    HAL_FLASHEx_Erase(&eraseInit,NULL);
+
+    uint32_t sectorError = 0xFFFFFFFFu;
+    bool ok = (HAL_FLASHEx_Erase(&eraseInit, &sectorError) == HAL_OK);
     uint32_t flash_ptr = FLASH_SECTOR_9_ADDRESS;
 
     const uint32_t *src = (const uint32_t*)_flashData;
     const uint32_t wordCount = sizeof(flash_data_t) / sizeof(uint32_t);
-    for (uint32_t i = 0; i < wordCount; ++i) {
-        HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, flash_ptr, src[i]);
-        flash_ptr += 4;
+    for (uint32_t i = 0; ok && (i < wordCount); ++i) {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, flash_ptr, src[i]) != HAL_OK) {
+            ok = false;
+        }
+        flash_ptr += 4u;
     }
     HAL_FLASH_Lock();
+
+    if (!ok) {
+        return false;
+    }
+    return memcmp((const void*)FLASH_SECTOR_9_ADDRESS, _flashData,
+                  sizeof(flash_data_t)) == 0;
 }
 void bsp_flash_read(flash_data_t *_flashData){
     memcpy(_flashData, (const void*)FLASH_SECTOR_9_ADDRESS, sizeof(flash_data_t));
