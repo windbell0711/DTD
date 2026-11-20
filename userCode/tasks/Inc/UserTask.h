@@ -32,10 +32,6 @@
 #define BUS_SERVO_ANGLE_INIT        90.0f    // 上电/首次进入控制时的目标角度
 #define BUS_SERVO_ANGLE_RATE_MAX    60.0f    // 度/秒，满杆时的角度变化率
 
-/* 把过载扭矩(0x24)改成指定百分比：刷一次即可，之后建议改回 0 避免反复写 EPROM */
-#define BUS_SERVO_APPLY_OVERLOAD_TORQUE   1
-#define BUS_SERVO_OVERLOAD_TORQUE_VALUE   100
-
 extern float g_busServoAngle;
 
 /* ---------- plate (rack) servo parameters ---------- */
