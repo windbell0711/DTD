@@ -70,6 +70,8 @@ constexpr float kBusServoBeepGestureHz = 1500.0f;
 constexpr float kBusServoBeepSuccessHz = 2000.0f;
 constexpr float kBusServoBeepFailHz = 800.0f;
 constexpr float kBusServoBeepVolume = 1.0f;
+constexpr uint32_t kBusServoFaultBeepMs = 1500u;
+constexpr float kBusServoFaultBeepHz = 1000.0f;
 
 enum BusServoCalibAction : uint8_t {
     BUS_CALIB_NONE = 0,
@@ -115,6 +117,8 @@ bool g_busServoFeedbackSuccess = false;
 bool g_busServoBeepActive = false;
 uint32_t g_busServoBeepOffTick = 0;
 bool g_busServoSpecialModeActive = false;
+bool g_busServoFaultLatched[kBusServoCount] = {false, false};
+bool g_busServoFaultActive = false;
 
 void BusServoBeep(float freq, uint32_t durationMs) {
     g_busServoBeepOffTick = HAL_GetTick() + durationMs;
@@ -189,14 +193,22 @@ static void BusServoPollStatus() {
     }
     g_busServoStatusTick = now;
 
+    const uint8_t idx = g_busServoStatusIndex;
     uint8_t d[1] = {0u};
-    const uint8_t id = kBusServoIds[g_busServoStatusIndex];
+    const uint8_t id = kBusServoIds[idx];
     if (g_busServo->readRegs(id, 0x41u, 1u, d)) {
-        g_busServoStatus[g_busServoStatusIndex] = d[0];
+        g_busServoStatus[idx] = d[0];
+        g_busServoFaultLatched[idx] = (d[0] != 0u);
     } else {
-        g_busServoStatus[g_busServoStatusIndex] = 0u;
+        g_busServoStatus[idx] = 0u;
     }
-    g_busServoStatusIndex = (uint8_t)(g_busServoStatusIndex ^ 1u);
+
+    const bool fault = g_busServoFaultLatched[0] || g_busServoFaultLatched[1];
+    if (fault && !g_busServoFaultActive) {
+        BusServoBeep(kBusServoFaultBeepHz, kBusServoFaultBeepMs);
+    }
+    g_busServoFaultActive = fault;
+    g_busServoStatusIndex = (uint8_t)(idx ^ 1u);
 }
 
 bool IsBusServoSpecialSettingMode() {

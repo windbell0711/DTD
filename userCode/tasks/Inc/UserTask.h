@@ -21,15 +21,15 @@
 /*
  * 总线舵机控制：
  *   ID2 默认与 ID1 镜像安装，目标位置自动取 4095 - ID1 的目标位置。
- *   角度限位 55~180 度，BusServoSetAngle() 内部 clamp。
+ *   角度限位，BusServoSetAngle() 内部 clamp。
  *   SC 上/中时左摇杆上下直接改变目标角度，变化率 = 摇杆值 * ANGLE_RATE_MAX。
  */
 #define BUS_SERVO_ID_1              1
 #define BUS_SERVO_ID_2              2
 #define BUS_SERVO_MIRROR_SECOND     1
-#define BUS_SERVO_ANGLE_MIN         10.0f
+#define BUS_SERVO_ANGLE_MIN         5.0f
 #define BUS_SERVO_ANGLE_MAX         140.0f
-#define BUS_SERVO_ANGLE_INIT        90.0f    // 上电/首次进入控制时的目标角度
+#define BUS_SERVO_ANGLE_INIT        80.0f    // 上电/首次进入控制时的目标角度
 #define BUS_SERVO_ANGLE_RATE_MAX    50.0f    // 度/秒，满杆时的角度变化率
 
 extern float g_busServoAngle;
@@ -45,10 +45,10 @@ extern float g_busServoAngle;
 /* ---------- plate auto-follow / manual override ---------- */
 /* 同步带速度（百分比），main 里已有同名宏时以 main 为准 */
 #ifndef SERVO_FRONT_SPEED_PERC
-#define SERVO_FRONT_SPEED_PERC  90
+#define SERVO_FRONT_SPEED_PERC  99
 #endif
 #ifndef SERVO_REAR_SPEED_PERC
-#define SERVO_REAR_SPEED_PERC   90
+#define SERVO_REAR_SPEED_PERC   99
 #endif
 
 #define PLATE_AUTO_THRESHOLD_DEG    80.0f    /* 总线角度高于此值 -> 齿条伸出 */
