@@ -29,8 +29,10 @@
 #define BUS_SERVO_MIRROR_SECOND     1
 #define BUS_SERVO_ANGLE_MIN         5.0f
 #define BUS_SERVO_ANGLE_MAX         140.0f
-#define BUS_SERVO_ANGLE_INIT        80.0f    // 上电/首次进入控制时的目标角度
+#define BUS_SERVO_ANGLE_INIT        85.0f    // 上电/首次进入控制时的目标角度
 #define BUS_SERVO_ANGLE_RATE_MAX    50.0f    // 度/秒，满杆时的角度变化率
+/* 过载扭矩(0x24)默认值：上电保证为该值，手势可临时改 */
+#define BUS_SERVO_OVERLOAD_TORQUE_DEFAULT   80u
 
 extern float g_busServoAngle;
 

@@ -40,6 +40,7 @@ volatile uint8_t g_dbgBusVolt1 = 0, g_dbgBusVolt2 = 0;  /* 0x3E 电压(0.1V) */
 volatile int16_t g_dbgBusLoad1 = 0, g_dbgBusLoad2 = 0;  /* 0x3C 负载 */
 volatile uint8_t g_dbgBusOk1 = 0, g_dbgBusOk2 = 0;      /* 读取是否成功 */
 static bool g_busServoAngleLimitDisabled = false;
+volatile uint8_t g_dbgOverloadOk1 = 0, g_dbgOverloadOk2 = 0;  /* 0x24 写入是否成功 */
 static uint32_t g_busServoLastTorqueOffTick = 0;
 float g_busServoAngle = BUS_SERVO_ANGLE_INIT;
 
@@ -76,7 +77,9 @@ constexpr float kBusServoFaultBeepHz = 1000.0f;
 enum BusServoCalibAction : uint8_t {
     BUS_CALIB_NONE = 0,
     BUS_CALIB_180,
-    BUS_CALIB_0
+    BUS_CALIB_0,
+    BUS_CALIB_TORQUE_80,
+    BUS_CALIB_TORQUE_99
 };
 
 enum StickDirection : uint8_t {
@@ -101,6 +104,8 @@ struct BusServoSettingGesture {
 const BusServoSettingGesture kBusServoSettingGestures[] = {
     {STICK_UP_LEFT,    STICK_UP_RIGHT,    BUS_CALIB_180},
     {STICK_DOWN_LEFT,  STICK_DOWN_RIGHT,  BUS_CALIB_0},
+    {STICK_UP_LEFT,    STICK_UP_LEFT,     BUS_CALIB_TORQUE_80},
+    {STICK_UP_RIGHT,   STICK_UP_RIGHT,    BUS_CALIB_TORQUE_99},
 };
 
 uint32_t g_busServoLastAckTick[kBusServoCount] = {0, 0};
@@ -211,6 +216,52 @@ static void BusServoPollStatus() {
     g_busServoStatusIndex = (uint8_t)(idx ^ 1u);
 }
 
+/**
+ * @brief 把两颗舵机的过载扭矩(0x24)写成指定百分比（写 EPROM）
+ * @note  只能通过特殊设置手势触发，上电不会自动改
+ */
+static bool BusServoWriteOverloadTorque(uint8_t percent) {
+    if (g_busServo == nullptr) {
+        return false;
+    }
+
+    bool ok = true;
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        const bool one = g_busServo->writeEepromReg(kBusServoIds[i], 0x24u, percent);
+        if (i == 0u) { g_dbgOverloadOk1 = one ? 1u : 0u; } else { g_dbgOverloadOk2 = one ? 1u : 0u; }
+        ok = ok && one;
+    }
+    return ok;
+}
+
+/**
+ * @brief 上电保证过载扭矩(0x24)为 80%
+ * @note  先读再比，只有不是 80 才写，避免每次上电都刷 EPROM
+ */
+static void BusServoEnsureOverloadDefault(void) {
+    if (g_busServo == nullptr) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < kBusServoCount; ++i) {
+        uint8_t cur = 0u;
+        bool ok = false;
+
+        if (g_busServo->readRegs(kBusServoIds[i], 0x24u, 1u, &cur)) {
+            ok = true;
+            if (cur != BUS_SERVO_OVERLOAD_TORQUE_DEFAULT) {
+                ok = g_busServo->writeEepromReg(kBusServoIds[i], 0x24u,
+                                                BUS_SERVO_OVERLOAD_TORQUE_DEFAULT);
+            }
+        }
+
+        if (i == 0u) {
+            g_dbgOverloadOk1 = ok ? 1u : 0u;
+        } else {
+            g_dbgOverloadOk2 = ok ? 1u : 0u;
+        }
+    }
+}
 bool IsBusServoSpecialSettingMode() {
     if (!RemoteControl::isOnline()) {
         return false;
@@ -443,7 +494,14 @@ void BusServoCalibrationHandle() {
         return;
     }
 
-    const bool ok = ApplyBusServoCalibration(action);
+    bool ok;
+    if (action == BUS_CALIB_TORQUE_80) {
+        ok = BusServoWriteOverloadTorque(80u);
+    } else if (action == BUS_CALIB_TORQUE_99) {
+        ok = BusServoWriteOverloadTorque(99u);
+    } else {
+        ok = ApplyBusServoCalibration(action);
+    }
     g_busServoCalibHoldDone = true;
     g_dbgCalibResult = ok ? 1u : 2u;
     StartBusServoCalibrationFeedback(ok);
@@ -846,6 +904,7 @@ void UserInit(){
     g_busServoLastTorqueOffTick = HAL_GetTick() - kBusServoTorqueOffRetryMs;
 
     BusServoDumpStatus();   /* 上电读一次状态，Watch 里看 */
+    BusServoEnsureOverloadDefault();   /* 过载扭矩保证为 80%，已是则不写 */
     g_busServoLastPingTick = HAL_GetTick() - kBusServoPingIntervalMs;
 }
 
